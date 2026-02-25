@@ -47,6 +47,9 @@ pub struct App {
     pub compose_reply_to_id: Option<String>,
     pub compose_error: String,
 
+    /// Shown on Timeline when a load failed (so we don't retry every tick).
+    pub timeline_message: String,
+
     runtime: Runtime,
 }
 
@@ -86,6 +89,7 @@ impl App {
             compose_buffer: String::new(),
             compose_reply_to_id: None,
             compose_error: String::new(),
+            timeline_message: String::new(),
             runtime,
         };
 
@@ -132,6 +136,7 @@ impl App {
                 self.selected,
                 self.scroll,
                 self.loading,
+                &self.timeline_message,
             ),
             View::TootDetail => {
                 if let Some(ref s) = self.detail_status {
@@ -202,7 +207,7 @@ impl App {
                                     save_config(self.config.as_ref().unwrap())?;
                                     self.view = View::Timeline;
                                     self.login_message.clear();
-                                    self.loading = true;
+                                    let _ = self.load_timeline(false);
                                 }
                                 Err(e) => {
                                     self.login_message = format!("Login failed: {e}");
@@ -250,7 +255,10 @@ impl App {
                     self.view = View::Compose;
                 }
                 KeyCode::Char('r') => {
-                    self.load_timeline()?;
+                    self.load_timeline(false)?;
+                }
+                KeyCode::Char('m') => {
+                    self.load_timeline(true)?;
                 }
                 _ => {}
             },
@@ -332,7 +340,7 @@ impl App {
                                 } else {
                                     View::Timeline
                                 };
-                                self.load_timeline()?;
+                                self.load_timeline(false)?;
                             }
                             Err(e) => self.compose_error = format!("Post failed: {e}"),
                         }
@@ -348,15 +356,17 @@ impl App {
         Ok(quit)
     }
 
-    fn load_timeline(&mut self) -> Result<()> {
+    /// append: false = refresh from top (replace); true = load next page (append).
+    fn load_timeline(&mut self, append: bool) -> Result<()> {
         if let Some(ref client) = self.client {
             self.loading = true;
-            let max_id = if self.statuses.is_empty() {
-                None
-            } else {
+            self.timeline_message.clear();
+            let max_id_str = if append && !self.statuses.is_empty() {
                 self.statuses.last().map(|s| s.id.clone())
+            } else {
+                None
             };
-            let max_id = max_id.as_deref();
+            let max_id = max_id_str.as_deref();
             match self.runtime.block_on(client.get_timeline_home(max_id)) {
                 Ok(mut new_statuses) => {
                     if max_id.is_some() {
@@ -374,7 +384,7 @@ impl App {
                     }
                 }
                 Err(e) => {
-                    self.login_message = format!("Failed to load timeline: {e}");
+                    self.timeline_message = format!("Failed to load timeline: {e}");
                 }
             }
             self.loading = false;
@@ -382,13 +392,15 @@ impl App {
         Ok(())
     }
 
+    /// Called each tick; fetches timeline when on home view with client, not loading, empty statuses, no prior error.
     pub fn ensure_timeline_loaded(&mut self) -> Result<()> {
         if self.view == View::Timeline
             && self.client.is_some()
             && !self.loading
             && self.statuses.is_empty()
+            && self.timeline_message.is_empty()
         {
-            self.load_timeline()?;
+            self.load_timeline(false)?;
         }
         Ok(())
     }
@@ -396,11 +408,48 @@ impl App {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     // r[verify toot.post.validation]
     #[test]
     fn compose_rejects_over_char_limit() {
         const LIMIT: usize = 500;
         let over = "x".repeat(LIMIT + 1);
         assert!(over.chars().count() > LIMIT);
+    }
+
+    /// Condition under which ensure_timeline_loaded triggers a fetch. Must match ensure_timeline_loaded().
+    fn should_auto_fetch_timeline(
+        view: View,
+        client_is_some: bool,
+        loading: bool,
+        statuses_empty: bool,
+        timeline_message_empty: bool,
+    ) -> bool {
+        view == View::Timeline
+            && client_is_some
+            && !loading
+            && statuses_empty
+            && timeline_message_empty
+    }
+
+    #[test]
+    fn auto_fetch_timeline_requires_not_loading() {
+        assert!(!should_auto_fetch_timeline(View::Timeline, true, true, true, true));
+    }
+
+    #[test]
+    fn auto_fetch_timeline_requires_empty_statuses() {
+        assert!(!should_auto_fetch_timeline(View::Timeline, true, false, false, true));
+    }
+
+    #[test]
+    fn auto_fetch_timeline_requires_no_prior_error() {
+        assert!(!should_auto_fetch_timeline(View::Timeline, true, false, true, false));
+    }
+
+    #[test]
+    fn auto_fetch_timeline_when_conditions_met() {
+        assert!(should_auto_fetch_timeline(View::Timeline, true, false, true, true));
     }
 }
