@@ -9,17 +9,18 @@ use crate::error::{MastotuiError, Result};
 /// r[config.persist-after-login]: instance URL and client id are stored here; secrets go to keyring.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
-    /// Mastodon instance base URL (e.g. https://mastodon.social)
+    /// Mastodon instance base URL (e.g. <https://mastodon.social>)
     pub instance_url: String,
     /// OAuth app client id (public; safe in config file)
     pub client_id: String,
 }
 
 impl AppConfig {
-    pub fn new(instance_url: String, client_id: String) -> Self {
+    #[must_use]
+    pub fn new(instance_url: &str, client_id: &str) -> Self {
         Self {
             instance_url: instance_url.trim_end_matches('/').to_string(),
-            client_id,
+            client_id: client_id.to_string(),
         }
     }
 }
@@ -81,7 +82,7 @@ mod tests {
     // r[verify config.persist-after-login]
     #[test]
     fn config_toml_has_no_secret_keys() {
-        let config = AppConfig::new("https://example.com".into(), "client-id".into());
+        let config = AppConfig::new("https://example.com", "client-id");
         let toml = toml::to_string_pretty(&config).unwrap();
         assert!(!toml.to_lowercase().contains("secret"));
         assert!(!toml.to_lowercase().contains("token"));

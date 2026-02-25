@@ -49,7 +49,7 @@ pub fn delete_access_token(instance_host: &str) -> Result<()> {
 
 /// Store client secret in keyring (Mastodon app secret; must not be in config file).
 pub fn set_client_secret(instance_host: &str, secret: &str) -> Result<()> {
-    let key = format!("{}@client_secret", instance_host);
+    let key = format!("{instance_host}@client_secret");
     let entry =
         Entry::new(SERVICE_NAME, &key).map_err(|e| MastotuiError::Credential(e.to_string()))?;
     entry
@@ -60,7 +60,7 @@ pub fn set_client_secret(instance_host: &str, secret: &str) -> Result<()> {
 
 /// Retrieve client secret from keyring.
 pub fn get_client_secret(instance_host: &str) -> Result<Option<String>> {
-    let key = format!("{}@client_secret", instance_host);
+    let key = format!("{instance_host}@client_secret");
     let entry =
         Entry::new(SERVICE_NAME, &key).map_err(|e| MastotuiError::Credential(e.to_string()))?;
     match entry.get_password() {

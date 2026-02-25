@@ -14,7 +14,7 @@ use crate::error::{MastotuiError, Result};
 const SCOPES: &[&str] = &["read", "write", "follow"];
 
 /// Register app with Mastodon instance if not already stored.
-/// Returns (client_id, client_secret). Stores secret in keyring only.
+/// Returns (`client_id`, `client_secret`). Stores secret in keyring only.
 pub async fn register_app_if_needed(
     instance_url: &str,
     client: &Client,
@@ -24,7 +24,7 @@ pub async fn register_app_if_needed(
     if let Some(secret) = get_client_secret(&host)? {
         if let Some(cfg) = config::load_config()? {
             if cfg.instance_url == instance_url && !cfg.client_id.is_empty() {
-                return Ok((cfg.client_id.clone(), secret));
+                return Ok((cfg.client_id, secret));
             }
         }
         // Secret exists but no config (e.g. config file deleted or never saved). Re-register to get client_id.
@@ -60,14 +60,14 @@ pub async fn register_app_if_needed(
     })?;
 
     set_client_secret(&host, &client_secret)?;
-    Ok((client_id.clone(), client_secret))
+    Ok((client_id, client_secret))
 }
 
-/// Build authorization URL for user to open in browser. Returns (url, pkce_verifier for later token exchange).
+/// Build authorization URL for user to open in browser. Returns (url, `pkce_verifier` for later token exchange).
 pub fn authorization_url(instance_url: &str, client_id: &str) -> Result<(String, String)> {
     let base = instance_url.trim_end_matches('/');
-    let auth_url = format!("{}/oauth/authorize", base);
-    let token_url = format!("{}/oauth/token", base);
+    let auth_url = format!("{base}/oauth/authorize");
+    let token_url = format!("{base}/oauth/token");
     let redirect = "urn:ietf:wg:oauth:2.0:oob";
 
     let client = oauth2::basic::BasicClient::new(
@@ -87,12 +87,13 @@ pub fn authorization_url(instance_url: &str, client_id: &str) -> Result<(String,
         .add_scopes(SCOPES.iter().map(|s| Scope::new((*s).to_string())))
         .url();
 
-    Ok((url.to_string(), pkce_verifier.secret().to_string()))
+    Ok((url.to_string(), pkce_verifier.secret().clone()))
 }
 
 /// Exchange authorization code (from out-of-band redirect) for access token.
+///
 /// r[auth.login.exchange-code]: store token in keyring after exchange.
-/// Uses client_secret_post (form body only); union.place and Doorkeeper accept this.
+/// Uses `client_secret_post` (form body only); union.place and Doorkeeper accept this.
 /// Sending both Basic and form can trigger "unsupported authentication method".
 pub async fn exchange_code_for_token(
     instance_url: &str,
@@ -103,7 +104,7 @@ pub async fn exchange_code_for_token(
     http_client: &Client,
 ) -> Result<String> {
     let base = instance_url.trim_end_matches('/');
-    let token_url = format!("{}/oauth/token", base);
+    let token_url = format!("{base}/oauth/token");
 
     let response = http_client
         .post(&token_url)

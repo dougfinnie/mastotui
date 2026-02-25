@@ -1,4 +1,5 @@
-//! App state and main event loop. r[config.first-run] r[timeline.home.fetch] r[timeline.pagination]
+//! App state and main event loop.
+//! r[config.first-run] r[timeline.home.fetch] r[timeline.pagination]
 //! r[toot.view-detail] r[toot.post.submit] r[toot.post.validation] r[toot.reply] r[toot.boost.toggle] r[toot.favourite.toggle]
 
 use crossterm::event::KeyCode;
@@ -61,15 +62,10 @@ impl App {
         let runtime = Runtime::new().map_err(|e| MastotuiError::Config(e.to_string()))?;
         let config = load_config()?;
 
-        let (view, client) = if let Some(ref cfg) = config {
-            if let Some(c) = client_from_stored_credentials(&cfg.instance_url)? {
-                (View::Timeline, Some(c))
-            } else {
-                (View::Login, None)
-            }
-        } else {
-            (View::Login, None)
-        };
+        let (view, client) = config.as_ref().map_or(Ok((View::Login, None)), |cfg| {
+            client_from_stored_credentials(&cfg.instance_url)
+                .map(|opt| opt.map_or_else(|| (View::Login, None), |c| (View::Timeline, Some(c))))
+        })?;
 
         let mut app = Self {
             view,
@@ -79,10 +75,10 @@ impl App {
             selected: 0,
             scroll: 0,
             loading: false,
-            instance_url: config
-                .as_ref()
-                .map(|c| c.instance_url.clone())
-                .unwrap_or_else(|| "https://mastodon.social".to_string()),
+            instance_url: config.as_ref().map_or_else(
+                || "https://mastodon.social".to_string(),
+                |c| c.instance_url.clone(),
+            ),
             auth_url: String::new(),
             pkce_verifier: String::new(),
             login_code: String::new(),
@@ -114,10 +110,10 @@ impl App {
             .runtime
             .block_on(register_app_if_needed(&url, &client))?;
         if let Some(ref mut c) = self.config {
-            c.client_id = client_id.clone();
-            c.instance_url = url.clone();
+            c.client_id.clone_from(&client_id);
+            c.instance_url.clone_from(&url);
         } else {
-            self.config = Some(AppConfig::new(url.clone(), client_id.clone()));
+            self.config = Some(AppConfig::new(&url, &client_id));
         }
         let (auth_url, pkce) = authorization_url(&url, &client_id)?;
         self.auth_url = auth_url;
@@ -189,7 +185,7 @@ impl App {
                             match self.start_login_flow() {
                                 Ok(()) => self.login_message.clear(),
                                 Err(e) => {
-                                    self.login_message = format!("Failed to start login: {e}")
+                                    self.login_message = format!("Failed to start login: {e}");
                                 }
                             }
                         }
@@ -219,11 +215,11 @@ impl App {
                                 &http,
                             )) {
                                 Ok(token) => {
-                                    self.client = Some(MastodonClient::new(url.clone(), token)?);
+                                    self.client = Some(MastodonClient::new(&url, &token)?);
                                     save_config(self.config.as_ref().unwrap())?;
                                     self.view = View::Timeline;
                                     self.login_message.clear();
-                                    let _ = self.load_timeline(false);
+                                    self.load_timeline(false);
                                 }
                                 Err(e) => {
                                     self.login_message = format!("Login failed: {e}");
@@ -271,10 +267,10 @@ impl App {
                     self.view = View::Compose;
                 }
                 KeyCode::Char('r') => {
-                    self.load_timeline(false)?;
+                    self.load_timeline(false);
                 }
                 KeyCode::Char('m') => {
-                    self.load_timeline(true)?;
+                    self.load_timeline(true);
                 }
                 _ => {}
             },
@@ -340,7 +336,7 @@ impl App {
                     if text.is_empty() {
                         self.compose_error = "Cannot post empty toot.".to_string();
                     } else if text.chars().count() > CHAR_LIMIT {
-                        self.compose_error = format!("Over {} character limit.", CHAR_LIMIT);
+                        self.compose_error = format!("Over {CHAR_LIMIT} character limit.");
                     } else if let Some(ref client) = self.client {
                         let reply_to = self.compose_reply_to_id.clone();
                         match self
@@ -356,7 +352,7 @@ impl App {
                                 } else {
                                     View::Timeline
                                 };
-                                self.load_timeline(false)?;
+                                self.load_timeline(false);
                             }
                             Err(e) => self.compose_error = format!("Post failed: {e}"),
                         }
@@ -373,7 +369,7 @@ impl App {
     }
 
     /// append: false = refresh from top (replace); true = load next page (append).
-    fn load_timeline(&mut self, append: bool) -> Result<()> {
+    fn load_timeline(&mut self, append: bool) {
         if let Some(ref client) = self.client {
             self.loading = true;
             self.timeline_message.clear();
@@ -405,7 +401,6 @@ impl App {
             }
             self.loading = false;
         }
-        Ok(())
     }
 
     /// Called each tick; fetches timeline when on home view with client, not loading, empty statuses, no prior error.
@@ -416,7 +411,7 @@ impl App {
             && self.statuses.is_empty()
             && self.timeline_message.is_empty()
         {
-            self.load_timeline(false)?;
+            self.load_timeline(false);
         }
         Ok(())
     }
@@ -434,7 +429,8 @@ mod tests {
         assert!(over.chars().count() > LIMIT);
     }
 
-    /// Condition under which ensure_timeline_loaded triggers a fetch. Must match ensure_timeline_loaded().
+    /// Condition under which `ensure_timeline_loaded` triggers a fetch. Must match `ensure_timeline_loaded()`.
+    #[allow(clippy::fn_params_excessive_bools)]
     fn should_auto_fetch_timeline(
         view: View,
         client_is_some: bool,

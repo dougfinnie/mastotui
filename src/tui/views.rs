@@ -8,20 +8,11 @@ use ratatui::Frame;
 
 use crate::api::{Account, Status};
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    // r[verify timeline.home.empty-state]
-    #[test]
-    fn empty_timeline_message_shown_when_no_toots() {
-        assert!(EMPTY_TIMELINE_MESSAGE.contains("No toots"));
-    }
-}
-
 /// Strip HTML tags from Mastodon content for plain-text display.
+///
 /// Ensures a space after hyperlinks so "link</a>next" becomes "link next".
 /// Block tags like </p> and <br> become newlines so content keeps paragraph breaks.
+#[must_use]
 pub fn strip_html(html: &str) -> String {
     let s = html
         .replace("</a>", "</a> ")
@@ -118,10 +109,9 @@ pub const EMPTY_TIMELINE_MESSAGE: &str = "No toots — home timeline is empty.";
 
 /// For display: the status whose author/content we show, and the booster account if this is a reblog.
 fn display_status(status: &Status) -> (&Status, Option<&Account>) {
-    match &status.reblog {
-        Some(inner) => (inner.as_ref(), Some(&status.account)),
-        None => (status, None),
-    }
+    status.reblog.as_ref().map_or((status, None), |inner| {
+        (inner.as_ref(), Some(&status.account))
+    })
 }
 
 /// r[timeline.home.fetch] r[timeline.home.empty-state]: timeline list.
@@ -196,12 +186,12 @@ pub fn draw_timeline(
                     } else {
                         &a.acct
                     };
-                    format!("@{} boosted · ", h)
+                    format!("@{h} boosted · ")
                 })
                 .unwrap_or_default();
             let header_line = Line::from(vec![
                 Span::styled(
-                    format!(" {} ", display),
+                    format!(" {display} "),
                     Style::default()
                         .add_modifier(Modifier::BOLD)
                         .fg(Color::Green),
@@ -271,7 +261,7 @@ pub fn draw_toot_detail(
             &b.acct
         };
         lines.push(Line::from(Span::styled(
-            format!("Boosted by @{}", handle),
+            format!("Boosted by @{handle}"),
             Style::default()
                 .fg(Color::Cyan)
                 .add_modifier(Modifier::ITALIC),
@@ -335,7 +325,7 @@ pub fn draw_compose(
 
     let len = buffer.chars().count();
     let over = len > char_limit;
-    let count_str = format!("{}/{}", len, char_limit);
+    let count_str = format!("{len}/{char_limit}");
     let count_style = if over {
         Style::default().fg(Color::Red)
     } else {
@@ -359,4 +349,15 @@ pub fn draw_compose(
         Style::default().dim(),
     ));
     frame.render_widget(Paragraph::new(help), chunks[3]);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // r[verify timeline.home.empty-state]
+    #[test]
+    fn empty_timeline_message_shown_when_no_toots() {
+        assert!(EMPTY_TIMELINE_MESSAGE.contains("No toots"));
+    }
 }

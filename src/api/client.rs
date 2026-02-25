@@ -1,4 +1,4 @@
-//! Mastodon API HTTP client. On 401 clears token and returns NotAuthenticated.
+//! Mastodon API HTTP client. On 401 clears token and returns `NotAuthenticated`.
 //! r[timeline.home.fetch] r[timeline.pagination] r[toot.post.submit] r[toot.reply] r[toot.boost.toggle] r[toot.favourite.toggle]
 //! r[auth.login.invalid-token]
 
@@ -17,13 +17,13 @@ pub struct MastodonClient {
 }
 
 impl MastodonClient {
-    pub fn new(base_url: String, access_token: String) -> Result<Self> {
-        let instance_host = instance_host_from_url(&base_url)?;
+    pub fn new(base_url: &str, access_token: &str) -> Result<Self> {
+        let instance_host = instance_host_from_url(base_url)?;
         let client = Client::builder().user_agent("mastotui/0.1").build()?;
         Ok(Self {
             base_url: base_url.trim_end_matches('/').to_string(),
             instance_host,
-            access_token,
+            access_token: access_token.to_string(),
             client,
         })
     }
@@ -32,7 +32,7 @@ impl MastodonClient {
         format!("{}/api/v1{}", self.base_url, path)
     }
 
-    /// On 401, clear stored token and return NotAuthenticated.
+    /// On 401, clear stored token and return `NotAuthenticated`.
     async fn request(
         &self,
         method: reqwest::Method,
@@ -60,10 +60,10 @@ impl MastodonClient {
 
     /// r[timeline.home.fetch]: fetch home timeline
     pub async fn get_timeline_home(&self, max_id: Option<&str>) -> Result<Vec<Status>> {
-        let path = match max_id {
-            Some(id) => format!("/timelines/home?limit=20&max_id={}", id),
-            None => "/timelines/home?limit=20".to_string(),
-        };
+        let path = max_id.map_or_else(
+            || "/timelines/home?limit=20".to_string(),
+            |id| format!("/timelines/home?limit=20&max_id={id}"),
+        );
         let response = self.request(reqwest::Method::GET, &path, None).await?;
         let status = response.status();
         if !status.is_success() {
@@ -100,9 +100,9 @@ impl MastodonClient {
     /// r[toot.boost.toggle]: reblog or unreblog
     pub async fn reblog(&self, id: &str, reblog: bool) -> Result<Status> {
         let path = if reblog {
-            format!("/statuses/{}/reblog", id)
+            format!("/statuses/{id}/reblog")
         } else {
-            format!("/statuses/{}/unreblog", id)
+            format!("/statuses/{id}/unreblog")
         };
         let response = self.request(reqwest::Method::POST, &path, None).await?;
         let status = response.status();
@@ -119,9 +119,9 @@ impl MastodonClient {
     /// r[toot.favourite.toggle]: favourite or unfavourite
     pub async fn favourite(&self, id: &str, favourite: bool) -> Result<Status> {
         let path = if favourite {
-            format!("/statuses/{}/favourite", id)
+            format!("/statuses/{id}/favourite")
         } else {
-            format!("/statuses/{}/unfavourite", id)
+            format!("/statuses/{id}/unfavourite")
         };
         let response = self.request(reqwest::Method::POST, &path, None).await?;
         let status = response.status();
@@ -137,7 +137,7 @@ impl MastodonClient {
 
     /// Get a single status by id (for thread context). r[toot.view-detail]
     pub async fn get_status(&self, id: &str) -> Result<Status> {
-        let path = format!("/statuses/{}", id);
+        let path = format!("/statuses/{id}");
         let response = self.request(reqwest::Method::GET, &path, None).await?;
         let status = response.status();
         if !status.is_success() {
@@ -159,7 +159,7 @@ pub fn client_from_stored_credentials(instance_url: &str) -> Result<Option<Masto
         Some(t) if !t.is_empty() => t,
         _ => return Ok(None),
     };
-    Ok(Some(MastodonClient::new(instance_url.to_string(), token)?))
+    Ok(Some(MastodonClient::new(instance_url, &token)?))
 }
 
 #[cfg(test)]
@@ -169,7 +169,7 @@ mod tests {
     // r[verify auth.login.use-stored-token]
     #[test]
     fn client_builds_from_instance_url_and_token() {
-        let c = MastodonClient::new("https://example.com".into(), "fake-token".into());
+        let c = MastodonClient::new("https://example.com", "fake-token");
         assert!(c.is_ok());
     }
 
@@ -208,11 +208,8 @@ mod tests {
     #[test]
     fn reblog_path_format() {
         let id = "42";
-        assert_eq!(format!("/statuses/{}/reblog", id), "/statuses/42/reblog");
-        assert_eq!(
-            format!("/statuses/{}/unreblog", id),
-            "/statuses/42/unreblog"
-        );
+        assert_eq!(format!("/statuses/{id}/reblog"), "/statuses/42/reblog");
+        assert_eq!(format!("/statuses/{id}/unreblog"), "/statuses/42/unreblog");
     }
 
     // r[verify toot.favourite.toggle]
@@ -220,11 +217,11 @@ mod tests {
     fn favourite_path_format() {
         let id = "42";
         assert_eq!(
-            format!("/statuses/{}/favourite", id),
+            format!("/statuses/{id}/favourite"),
             "/statuses/42/favourite"
         );
         assert_eq!(
-            format!("/statuses/{}/unfavourite", id),
+            format!("/statuses/{id}/unfavourite"),
             "/statuses/42/unfavourite"
         );
     }
@@ -233,6 +230,6 @@ mod tests {
     #[test]
     fn get_status_path_format() {
         let id = "99";
-        assert_eq!(format!("/statuses/{}", id), "/statuses/99");
+        assert_eq!(format!("/statuses/{id}"), "/statuses/99");
     }
 }
