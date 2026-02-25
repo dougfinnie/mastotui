@@ -25,7 +25,6 @@ Standard commands — see `README.md` and `.github/workflows/ci.yml` for the can
 
 ### Known caveats
 
-- **Clippy `use_self` lint**: On Rust 1.93+ the `clippy::use_self` lint fires on `Status.reblog` in `src/api/types.rs`. This is a pre-existing upstream issue — the CI may pin to an older stable that doesn't trigger it. Do not modify the code to fix it unless the repo owner updates.
 - **TUI requires a real TTY**: `cargo run` needs an interactive terminal (crossterm + stdout). In headless/shell-only contexts, it will error. Use the Desktop pane terminal or `dbus-run-session` wrapper when needed.
 - **Mastodon credentials**: Full end-to-end testing (OAuth login, posting, timeline) requires a real Mastodon account. Unit/integration tests do **not** require credentials.
 - **Tracey** (spec traceability tool) is optional. It's used by `./scripts/check-spec.sh` but not required for `cargo build`/`cargo test`.
