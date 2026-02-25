@@ -41,3 +41,23 @@ On first run you’ll see the login screen. Enter your instance URL (e.g. `https
 ## Spec and Tracey
 
 Requirements are in `docs/spec/mastotui.md`. Use [Tracey](https://github.com/bearcove/tracey) for coverage: `tracey query status`, `tracey web`.
+
+### Detecting spec/code drift (CI or local)
+
+Run all checks (validate refs, require full impl + verify coverage, no stale refs):
+
+```bash
+./scripts/check-spec.sh
+```
+
+Individual Tracey commands you can run in a pipeline:
+
+| Command | Purpose |
+|--------|--------|
+| `tracey query validate` | Fail if any refs are broken or invalid |
+| `tracey query uncovered` | List requirements with no `r[impl]` (fail if not "0 uncovered") |
+| `tracey query untested` | List requirements with no `r[verify]` (fail if not "0 untested") |
+| `tracey query stale` | List refs pointing to old rule versions (fail if not "no stale references") |
+| `tracey pre-commit` | In a git pre-commit hook: fail if spec rule text changed without version bump |
+
+To enforce no drift in CI, run `./scripts/check-spec.sh` after `cargo fmt -- --check`, `cargo clippy -- -D warnings`, and `cargo test`. See `.github/workflows/ci.yml` if present.
