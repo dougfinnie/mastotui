@@ -10,7 +10,7 @@ r[auth.app.register.on-first-login]
 Given a valid Mastodon instance URL, when the user runs login for the first time, the client MUST register an app (if needed), store client id and client secret, and initiate OAuth.
 
 r[auth.app.register.skip-when-stored]
-Given client id and secret are already stored for the instance, when the user runs login, the client MUST skip app registration and go straight to OAuth.
+Given both client id (in config) and client secret (in secure storage) are already stored for the instance, when the user runs login, the client MUST skip app registration and go straight to OAuth. If only one is present (e.g. secret in keyring but config file missing), the client MUST NOT fail with "no config"; it MUST re-register the app to recover and obtain a valid client id.
 
 ### User login
 
@@ -74,4 +74,5 @@ These are not requirements but document how the current implementation satisfies
 
 - **OAuth:** The app uses PKCE and out-of-band redirect (`urn:ietf:wg:oauth:2.0:oob`); the user pastes the authorization code into the TUI. The token request sends client credentials via HTTP Basic auth (and form body) for compatibility with instances that require `client_secret_basic`.
 - **Secure storage:** On Linux, macOS, and Windows, the client secret and access token are stored in the system credential store (e.g. Secret Service, Keychain, Credential Manager), not in the config file.
+- **Skip vs re-register:** Skip is only used when both config (instance URL + client id) and keyring (client secret) exist for the instance. If the keyring has a secret but the config file is missing (e.g. app was closed before first successful login), the app re-registers and overwrites the stored secret so login can proceed.
 - **Character limit:** The compose UI enforces a 500-character limit for new toots and replies; instances may have different limits.
