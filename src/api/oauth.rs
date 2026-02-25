@@ -92,7 +92,8 @@ pub fn authorization_url(instance_url: &str, client_id: &str) -> Result<(String,
 
 /// Exchange authorization code (from out-of-band redirect) for access token.
 /// r[auth.login.exchange-code]: store token in keyring after exchange.
-/// Uses HTTP Basic auth for client credentials; some instances require it.
+/// Uses client_secret_post (form body only); union.place and Doorkeeper accept this.
+/// Sending both Basic and form can trigger "unsupported authentication method".
 pub async fn exchange_code_for_token(
     instance_url: &str,
     client_id: &str,
@@ -106,7 +107,6 @@ pub async fn exchange_code_for_token(
 
     let response = http_client
         .post(&token_url)
-        .basic_auth(client_id, Some(client_secret))
         .form(&[
             ("grant_type", "authorization_code"),
             ("client_id", client_id),
