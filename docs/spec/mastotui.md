@@ -15,7 +15,7 @@ Given client id and secret are already stored for the instance, when the user ru
 ### User login
 
 r[auth.login.exchange-code]
-Given OAuth has been initiated, when the user completes the flow in the browser and returns, the client MUST exchange the authorization code for an access token and store the token (e.g. in config).
+Given OAuth has been initiated, when the user completes the flow in the browser and returns, the client MUST exchange the authorization code for an access token (authenticating to the token endpoint with client credentials, e.g. HTTP Basic or form body) and store the token in secure storage (e.g. system keyring), not in plain config.
 
 r[auth.login.use-stored-token]
 Given a stored access token exists, when the app starts, the client MUST use it without asking for login again until the token is invalid.
@@ -47,7 +47,7 @@ r[toot.post.submit]
 Given the user is on the compose screen with valid text, when the user submits, the client MUST POST the toot and show success (and optionally refresh the timeline).
 
 r[toot.post.validation]
-Given the user submits without content or over the character limit, the client MUST NOT send the request and MUST show a validation error.
+Given the user submits without content or over the character limit (e.g. 500 characters), the client MUST NOT send the request and MUST show a validation error.
 
 r[toot.reply]
 Given a toot is open, when the user chooses Reply and submits, the client MUST POST a reply with the correct in_reply_to_id and show success.
@@ -63,7 +63,15 @@ Given a toot is visible, when the user triggers Favourite, the client MUST call 
 ## Configuration and persistence
 
 r[config.persist-after-login]
-Given the app has completed login, when the app exits, the instance URL, client id/secret (if used), and access token MUST be stored in a local config (e.g. under XDG config dir such as ~/.config/mastotui/).
+Given the app has completed login, when the app exits, the instance URL and client id MUST be stored in local config (e.g. under XDG config dir such as ~/.config/mastotui/). The client secret and access token MUST be stored in secure storage (e.g. system keyring), not in the config file.
 
 r[config.first-run]
 Given the user has no config, when the app starts, the first screen MUST be "add instance" or login, not the timeline.
+
+## Implementation notes
+
+These are not requirements but document how the current implementation satisfies the spec:
+
+- **OAuth:** The app uses PKCE and out-of-band redirect (`urn:ietf:wg:oauth:2.0:oob`); the user pastes the authorization code into the TUI. The token request sends client credentials via HTTP Basic auth (and form body) for compatibility with instances that require `client_secret_basic`.
+- **Secure storage:** On Linux, macOS, and Windows, the client secret and access token are stored in the system credential store (e.g. Secret Service, Keychain, Credential Manager), not in the config file.
+- **Character limit:** The compose UI enforces a 500-character limit for new toots and replies; instances may have different limits.
