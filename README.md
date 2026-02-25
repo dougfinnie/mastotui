@@ -1,6 +1,8 @@
 # mastotui
 
-Terminal UI client for Mastodon. Read your home timeline, view toots, post, reply, boost, and favourite from the terminal.
+A terminal UI client for Mastodon. Read your home timeline, view toots, post, reply, boost, and favourite from the terminal.
+
+**Repository:** [github.com/dougfinnie/mastotui](https://github.com/dougfinnie/mastotui)
 
 ## Build
 
@@ -61,3 +63,7 @@ Individual Tracey commands you can run in a pipeline:
 | `tracey pre-commit` | In a git pre-commit hook: fail if spec rule text changed without version bump |
 
 To enforce no drift in CI, run `./scripts/check-spec.sh` after `cargo fmt -- --check`, `cargo clippy -- -D warnings`, and `cargo test`. See `.github/workflows/ci.yml` if present.
+
+## License
+
+Dual-licensed under **MIT** or **Apache-2.0**; see [LICENSE-MIT](LICENSE-MIT) for the MIT text.
