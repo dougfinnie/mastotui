@@ -15,6 +15,12 @@ fn strip_html_handles_empty() {
 }
 
 #[test]
+fn strip_html_space_after_link() {
+    let html = r#"<p>See <a href="https://example.com">this link</a>for more.</p>"#;
+    assert!(strip_html(html).contains("link for"));
+}
+
+#[test]
 fn empty_timeline_message_contains_no_toots() {
     assert!(EMPTY_TIMELINE_MESSAGE.contains("No toots"));
 }

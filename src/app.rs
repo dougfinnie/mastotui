@@ -127,8 +127,9 @@ impl App {
 
     pub fn draw(&mut self, frame: &mut Frame) {
         if self.view == View::Timeline {
-            let total = frame.area().height as usize;
-            self.timeline_visible_rows = total.saturating_sub(2).max(1);
+            let content_height = frame.area().height as usize;
+            let content_height = content_height.saturating_sub(2).max(1);
+            self.timeline_visible_rows = (content_height / 2).max(1);
             if !self.statuses.is_empty() {
                 if self.selected >= self.scroll + self.timeline_visible_rows {
                     self.scroll = self.selected - self.timeline_visible_rows + 1;

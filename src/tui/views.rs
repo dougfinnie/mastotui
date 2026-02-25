@@ -20,9 +20,17 @@ mod tests {
 }
 
 /// Strip HTML tags from Mastodon content for plain-text display.
+/// Ensures a space after hyperlinks so "link</a>next" becomes "link next".
+/// Block tags like </p> and <br> become newlines so content keeps paragraph breaks.
 pub fn strip_html(html: &str) -> String {
-    let fragment = scraper::Html::parse_fragment(html);
-    fragment.root_element().text().collect::<Vec<_>>().join("")
+    let s = html
+        .replace("</a>", "</a> ")
+        .replace("</p>", "\n")
+        .replace("<br>", "\n")
+        .replace("<br/>", "\n")
+        .replace("<br />", "\n");
+    let fragment = scraper::Html::parse_fragment(&s);
+    fragment.root_element().text().collect::<Vec<_>>().join("").trim().to_string()
 }
 
 /// r[config.first-run]: login / add instance screen.
@@ -152,10 +160,11 @@ pub fn draw_timeline(
             .style(Style::default().fg(Color::DarkGray));
         frame.render_widget(para, content_area);
     } else {
-        let visible = content_area.height as usize;
+        // Each timeline item is 2 lines (header, then content on new line); items that fit = height/2
+        let visible = (content_area.height as usize / 2).max(1);
         let start = scroll.min(statuses.len().saturating_sub(visible));
         let end = (start + visible).min(statuses.len());
-        let mut lines: Vec<Line> = Vec::with_capacity(end - start);
+        let mut lines: Vec<Line> = Vec::with_capacity(2 * (end - start));
         for (i, s) in statuses[start..end].iter().enumerate() {
             let idx = start + i;
             let style = if idx == selected {
@@ -174,8 +183,6 @@ pub fn draw_timeline(
                 account.acct.as_str()
             };
             let header = format!("@{} · {}", handle, display_status.created_at);
-            let content = strip_html(&display_status.content);
-            let content_preview = content.lines().next().unwrap_or(&content);
             let booster_prefix = booster
                 .map(|a| {
                     let h = if a.acct.is_empty() {
@@ -186,7 +193,7 @@ pub fn draw_timeline(
                     format!("@{} boosted · ", h)
                 })
                 .unwrap_or_default();
-            let line = Line::from(vec![
+            let header_line = Line::from(vec![
                 Span::styled(
                     format!(" {} ", display),
                     Style::default()
@@ -200,10 +207,15 @@ pub fn draw_timeline(
                         .add_modifier(Modifier::ITALIC),
                 ),
                 Span::styled(header, Style::default().fg(Color::DarkGray)),
-                Span::raw("\n"),
-                Span::styled(content_preview.chars().take(80).collect::<String>(), style),
             ]);
-            lines.push(line);
+            lines.push(header_line);
+            let content = strip_html(&display_status.content);
+            let content_preview = content.lines().next().unwrap_or(&content);
+            let content_line = Line::from(Span::styled(
+                content_preview.chars().take(80).collect::<String>(),
+                style,
+            ));
+            lines.push(content_line);
         }
         let para = Paragraph::new(lines)
             .block(Block::default().borders(Borders::ALL).title(" Timeline "))
