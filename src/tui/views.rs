@@ -6,7 +6,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
 use ratatui::Frame;
 
-use crate::api::Status;
+use crate::api::{Account, Status};
 
 #[cfg(test)]
 mod tests {
@@ -102,6 +102,14 @@ pub fn draw_login(
 /// Message shown when home timeline is empty. r[timeline.home.empty-state]
 pub const EMPTY_TIMELINE_MESSAGE: &str = "No toots — home timeline is empty.";
 
+/// For display: the status whose author/content we show, and the booster account if this is a reblog.
+fn display_status(status: &Status) -> (&Status, Option<&Account>) {
+    match &status.reblog {
+        Some(inner) => (inner.as_ref(), Some(&status.account)),
+        None => (status, None),
+    }
+}
+
 /// r[timeline.home.fetch] r[timeline.home.empty-state]: timeline list.
 pub fn draw_timeline(
     frame: &mut Frame,
@@ -109,6 +117,7 @@ pub fn draw_timeline(
     selected: usize,
     scroll: usize,
     loading: bool,
+    message: &str,
 ) {
     let area = frame.area();
     let chunks = Layout::vertical([
@@ -132,7 +141,12 @@ pub fn draw_timeline(
         return;
     }
 
-    if statuses.is_empty() {
+    if !message.is_empty() {
+        let para = Paragraph::new(message)
+            .block(Block::default().borders(Borders::ALL).title(" Timeline "))
+            .style(Style::default().fg(Color::Red));
+        frame.render_widget(para, content_area);
+    } else if statuses.is_empty() {
         let para = Paragraph::new(EMPTY_TIMELINE_MESSAGE)
             .block(Block::default().borders(Borders::ALL).title(" Timeline "))
             .style(Style::default().fg(Color::DarkGray));
@@ -151,22 +165,33 @@ pub fn draw_timeline(
             } else {
                 Style::default()
             };
-            let account = &s.account;
+            let (display_status, booster) = display_status(s);
+            let account = &display_status.account;
             let display = account.display_name.as_str();
             let handle = if account.acct.is_empty() {
                 account.username.as_str()
             } else {
                 account.acct.as_str()
             };
-            let header = format!("@{} · {}", handle, s.created_at);
-            let content = strip_html(&s.content);
+            let header = format!("@{} · {}", handle, display_status.created_at);
+            let content = strip_html(&display_status.content);
             let content_preview = content.lines().next().unwrap_or(&content);
+            let booster_prefix = booster
+                .map(|a| {
+                    let h = if a.acct.is_empty() { &a.username } else { &a.acct };
+                    format!("@{} boosted · ", h)
+                })
+                .unwrap_or_default();
             let line = Line::from(vec![
                 Span::styled(
                     format!(" {} ", display),
                     Style::default()
                         .add_modifier(Modifier::BOLD)
                         .fg(Color::Green),
+                ),
+                Span::styled(
+                    booster_prefix,
+                    Style::default().fg(Color::Cyan).add_modifier(Modifier::ITALIC),
                 ),
                 Span::styled(header, Style::default().fg(Color::DarkGray)),
                 Span::raw("\n"),
@@ -210,10 +235,22 @@ pub fn draw_toot_detail(
     );
     frame.render_widget(title, chunks[0]);
 
-    let acc = &status.account;
-    let header = format!("@{} · {}", acc.acct, status.created_at);
-    let content = strip_html(&status.content);
-    let lines = vec![
+    let (display_status, booster) = display_status(status);
+    let acc = &display_status.account;
+    let header = format!("@{} · {}", acc.acct, display_status.created_at);
+    let content = strip_html(&display_status.content);
+    let mut lines = vec![];
+    if let Some(b) = booster {
+        let handle = if b.acct.is_empty() { &b.username } else { &b.acct };
+        lines.push(Line::from(Span::styled(
+            format!("Boosted by @{}", handle),
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::ITALIC),
+        )));
+        lines.push(Line::from(""));
+    }
+    lines.extend_from_slice(&[
         Line::from(Span::styled(
             acc.display_name.as_str(),
             Style::default()
@@ -223,7 +260,7 @@ pub fn draw_toot_detail(
         Line::from(Span::styled(header, Style::default().fg(Color::DarkGray))),
         Line::from(""),
         Line::from(content),
-    ];
+    ]);
     let block = Block::default().borders(Borders::ALL);
     let para = Paragraph::new(lines).block(block).wrap(Wrap { trim: true });
     frame.render_widget(para, chunks[1]);
