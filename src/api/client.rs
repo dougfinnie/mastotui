@@ -198,7 +198,10 @@ mod tests {
     #[test]
     fn reply_includes_in_reply_to_id() {
         let body = serde_json::json!({ "status": "hi", "in_reply_to_id": "99" });
-        assert_eq!(body.get("in_reply_to_id").and_then(|v| v.as_str()), Some("99"));
+        assert_eq!(
+            body.get("in_reply_to_id").and_then(|v| v.as_str()),
+            Some("99")
+        );
     }
 
     // r[verify toot.boost.toggle]
@@ -206,15 +209,24 @@ mod tests {
     fn reblog_path_format() {
         let id = "42";
         assert_eq!(format!("/statuses/{}/reblog", id), "/statuses/42/reblog");
-        assert_eq!(format!("/statuses/{}/unreblog", id), "/statuses/42/unreblog");
+        assert_eq!(
+            format!("/statuses/{}/unreblog", id),
+            "/statuses/42/unreblog"
+        );
     }
 
     // r[verify toot.favourite.toggle]
     #[test]
     fn favourite_path_format() {
         let id = "42";
-        assert_eq!(format!("/statuses/{}/favourite", id), "/statuses/42/favourite");
-        assert_eq!(format!("/statuses/{}/unfavourite", id), "/statuses/42/unfavourite");
+        assert_eq!(
+            format!("/statuses/{}/favourite", id),
+            "/statuses/42/favourite"
+        );
+        assert_eq!(
+            format!("/statuses/{}/unfavourite", id),
+            "/statuses/42/unfavourite"
+        );
     }
 
     // r[verify toot.view-detail]

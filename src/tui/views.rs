@@ -188,7 +188,12 @@ pub fn draw_timeline(
 }
 
 /// r[toot.view-detail]: single toot with full content and actions.
-pub fn draw_toot_detail(frame: &mut Frame, status: &Status, _reply_id: Option<&str>, message: &str) {
+pub fn draw_toot_detail(
+    frame: &mut Frame,
+    status: &Status,
+    _reply_id: Option<&str>,
+    message: &str,
+) {
     let area = frame.area();
     let chunks = Layout::vertical([
         Constraint::Length(1),

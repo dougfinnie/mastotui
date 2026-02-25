@@ -36,6 +36,9 @@ mod tests {
     #[test]
     fn invalid_token_returns_not_authenticated() {
         let _: MastotuiError = MastotuiError::NotAuthenticated;
-        assert!(matches!(MastotuiError::NotAuthenticated, MastotuiError::NotAuthenticated));
+        assert!(matches!(
+            MastotuiError::NotAuthenticated,
+            MastotuiError::NotAuthenticated
+        ));
     }
 }
