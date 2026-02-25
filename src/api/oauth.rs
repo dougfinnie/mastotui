@@ -6,7 +6,6 @@ use reqwest::Client;
 
 use crate::api::types::Application;
 use crate::config;
-use crate::config::AppConfig;
 use crate::credential::{
     get_client_secret, instance_host_from_url, set_access_token, set_client_secret,
 };
@@ -49,12 +48,13 @@ pub async fn register_app_if_needed(
         message: format!("Invalid app registration response: {e}"),
     })?;
 
+    let status_code = status.as_u16();
     let client_id = body.client_id.ok_or_else(|| MastotuiError::Api {
-        status,
+        status: status_code,
         message: "App registration did not return client_id".into(),
     })?;
     let client_secret = body.client_secret.ok_or_else(|| MastotuiError::Api {
-        status,
+        status: status_code,
         message: "App registration did not return client_secret".into(),
     })?;
 
@@ -69,7 +69,7 @@ pub fn authorization_url(instance_url: &str, client_id: &str) -> Result<(String,
     let token_url = format!("{}/oauth/token", base);
     let redirect = "urn:ietf:wg:oauth:2.0:oob";
 
-    let client = oauth2::Client::new(
+    let client = oauth2::basic::BasicClient::new(
         ClientId::new(client_id.to_string()),
         None,
         AuthUrl::new(auth_url).map_err(|e| MastotuiError::OAuth(e.to_string()))?,
@@ -91,6 +91,7 @@ pub fn authorization_url(instance_url: &str, client_id: &str) -> Result<(String,
 
 /// Exchange authorization code (from out-of-band redirect) for access token.
 /// r[auth.login.exchange-code]: store token in keyring after exchange.
+/// Uses HTTP Basic auth for client credentials; some instances require it.
 pub async fn exchange_code_for_token(
     instance_url: &str,
     client_id: &str,
@@ -104,6 +105,7 @@ pub async fn exchange_code_for_token(
 
     let response = http_client
         .post(&token_url)
+        .basic_auth(client_id, Some(client_secret))
         .form(&[
             ("grant_type", "authorization_code"),
             ("client_id", client_id),
