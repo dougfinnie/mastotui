@@ -178,7 +178,11 @@ pub fn draw_timeline(
             let content_preview = content.lines().next().unwrap_or(&content);
             let booster_prefix = booster
                 .map(|a| {
-                    let h = if a.acct.is_empty() { &a.username } else { &a.acct };
+                    let h = if a.acct.is_empty() {
+                        &a.username
+                    } else {
+                        &a.acct
+                    };
                     format!("@{} boosted · ", h)
                 })
                 .unwrap_or_default();
@@ -191,7 +195,9 @@ pub fn draw_timeline(
                 ),
                 Span::styled(
                     booster_prefix,
-                    Style::default().fg(Color::Cyan).add_modifier(Modifier::ITALIC),
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::ITALIC),
                 ),
                 Span::styled(header, Style::default().fg(Color::DarkGray)),
                 Span::raw("\n"),
@@ -241,7 +247,11 @@ pub fn draw_toot_detail(
     let content = strip_html(&display_status.content);
     let mut lines = vec![];
     if let Some(b) = booster {
-        let handle = if b.acct.is_empty() { &b.username } else { &b.acct };
+        let handle = if b.acct.is_empty() {
+            &b.username
+        } else {
+            &b.acct
+        };
         lines.push(Line::from(Span::styled(
             format!("Boosted by @{}", handle),
             Style::default()
