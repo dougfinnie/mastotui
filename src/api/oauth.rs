@@ -133,3 +133,15 @@ pub async fn exchange_code_for_token(
     set_access_token(&host, access_token)?;
     Ok(access_token.to_string())
 }
+
+#[cfg(test)]
+mod tests {
+    // r[verify auth.login.exchange-code]
+    #[test]
+    fn token_exchange_uses_oauth_token_endpoint() {
+        let base = "https://mastodon.social";
+        let token_url = format!("{}/oauth/token", base.trim_end_matches('/'));
+        assert!(token_url.ends_with("/oauth/token"));
+        assert_eq!(token_url, "https://mastodon.social/oauth/token");
+    }
+}

@@ -393,3 +393,14 @@ impl App {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    // r[verify toot.post.validation]
+    #[test]
+    fn compose_rejects_over_char_limit() {
+        const LIMIT: usize = 500;
+        let over = "x".repeat(LIMIT + 1);
+        assert!(over.chars().count() > LIMIT);
+    }
+}

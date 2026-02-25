@@ -62,3 +62,28 @@ pub fn save_config(config: &AppConfig) -> Result<()> {
         .map_err(|e| MastotuiError::Config(format!("Failed to write config: {e}")))?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // r[verify config.first-run]
+    #[test]
+    fn load_config_returns_none_when_file_missing() {
+        let temp = tempfile::tempdir().unwrap();
+        std::env::set_var("XDG_CONFIG_HOME", temp.path());
+        let result = load_config();
+        std::env::remove_var("XDG_CONFIG_HOME");
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
+    }
+
+    // r[verify config.persist-after-login]
+    #[test]
+    fn config_toml_has_no_secret_keys() {
+        let config = AppConfig::new("https://example.com".into(), "client-id".into());
+        let toml = toml::to_string_pretty(&config).unwrap();
+        assert!(!toml.to_lowercase().contains("secret"));
+        assert!(!toml.to_lowercase().contains("token"));
+    }
+}

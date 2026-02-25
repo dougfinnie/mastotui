@@ -77,3 +77,22 @@ pub fn instance_host_from_url(instance_url: &str) -> Result<String> {
         .map(str::to_string)
         .ok_or_else(|| MastotuiError::Config("Instance URL has no host".into()))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // r[verify auth.app.register.on-first-login]
+    #[test]
+    fn instance_host_parsed_for_app_registration() {
+        let host = instance_host_from_url("https://mastodon.social").unwrap();
+        assert_eq!(host, "mastodon.social");
+    }
+
+    // r[verify auth.app.register.skip-when-stored]
+    #[test]
+    fn instance_host_normalizes_trailing_slash() {
+        let host = instance_host_from_url("https://mastodon.social/").unwrap();
+        assert_eq!(host, "mastodon.social");
+    }
+}

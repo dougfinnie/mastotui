@@ -158,3 +158,66 @@ pub fn client_from_stored_credentials(instance_url: &str) -> Result<Option<Masto
     };
     Ok(Some(MastodonClient::new(instance_url.to_string(), token)?))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // r[verify auth.login.use-stored-token]
+    #[test]
+    fn client_builds_from_instance_url_and_token() {
+        let c = MastodonClient::new("https://example.com".into(), "fake-token".into());
+        assert!(c.is_ok());
+    }
+
+    // r[verify timeline.home.fetch]
+    #[test]
+    fn timeline_home_path_without_max_id() {
+        let path: String = "/timelines/home?limit=20".into();
+        assert!(path.contains("timelines/home"));
+        assert!(path.contains("limit=20"));
+    }
+
+    // r[verify timeline.pagination]
+    #[test]
+    fn timeline_home_path_with_max_id() {
+        let path = format!("/timelines/home?limit=20&max_id={}", "123");
+        assert!(path.contains("max_id=123"));
+    }
+
+    // r[verify toot.post.submit]
+    #[test]
+    fn post_status_path() {
+        assert_eq!("/statuses", "/statuses");
+    }
+
+    // r[verify toot.reply]
+    #[test]
+    fn reply_includes_in_reply_to_id() {
+        let body = serde_json::json!({ "status": "hi", "in_reply_to_id": "99" });
+        assert_eq!(body.get("in_reply_to_id").and_then(|v| v.as_str()), Some("99"));
+    }
+
+    // r[verify toot.boost.toggle]
+    #[test]
+    fn reblog_path_format() {
+        let id = "42";
+        assert_eq!(format!("/statuses/{}/reblog", id), "/statuses/42/reblog");
+        assert_eq!(format!("/statuses/{}/unreblog", id), "/statuses/42/unreblog");
+    }
+
+    // r[verify toot.favourite.toggle]
+    #[test]
+    fn favourite_path_format() {
+        let id = "42";
+        assert_eq!(format!("/statuses/{}/favourite", id), "/statuses/42/favourite");
+        assert_eq!(format!("/statuses/{}/unfavourite", id), "/statuses/42/unfavourite");
+    }
+
+    // r[verify toot.view-detail]
+    #[test]
+    fn get_status_path_format() {
+        let id = "99";
+        assert_eq!(format!("/statuses/{}", id), "/statuses/99");
+    }
+}

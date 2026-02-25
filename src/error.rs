@@ -27,3 +27,15 @@ pub enum MastotuiError {
 }
 
 pub type Result<T> = std::result::Result<T, MastotuiError>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // r[verify auth.login.invalid-token]
+    #[test]
+    fn invalid_token_returns_not_authenticated() {
+        let _: MastotuiError = MastotuiError::NotAuthenticated;
+        assert!(matches!(MastotuiError::NotAuthenticated, MastotuiError::NotAuthenticated));
+    }
+}

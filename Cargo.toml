@@ -39,6 +39,7 @@ scraper = "0.20"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+tempfile = "3"
 
 [lints.rust]
 unsafe_code = "forbid"

@@ -8,6 +8,17 @@ use ratatui::Frame;
 
 use crate::api::Status;
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // r[verify timeline.home.empty-state]
+    #[test]
+    fn empty_timeline_message_shown_when_no_toots() {
+        assert!(EMPTY_TIMELINE_MESSAGE.contains("No toots"));
+    }
+}
+
 /// Strip HTML tags from Mastodon content for plain-text display.
 pub fn strip_html(html: &str) -> String {
     let fragment = scraper::Html::parse_fragment(html);
@@ -88,6 +99,9 @@ pub fn draw_login(
     frame.render_widget(Paragraph::new(help), chunks[2]);
 }
 
+/// Message shown when home timeline is empty. r[timeline.home.empty-state]
+pub const EMPTY_TIMELINE_MESSAGE: &str = "No toots — home timeline is empty.";
+
 /// r[timeline.home.fetch] r[timeline.home.empty-state]: timeline list.
 pub fn draw_timeline(
     frame: &mut Frame,
@@ -119,7 +133,7 @@ pub fn draw_timeline(
     }
 
     if statuses.is_empty() {
-        let para = Paragraph::new("No toots — home timeline is empty.")
+        let para = Paragraph::new(EMPTY_TIMELINE_MESSAGE)
             .block(Block::default().borders(Borders::ALL).title(" Timeline "))
             .style(Style::default().fg(Color::DarkGray));
         frame.render_widget(para, content_area);
