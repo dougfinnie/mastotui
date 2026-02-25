@@ -1,7 +1,7 @@
 //! App state and main event loop. r[config.first-run] r[timeline.home.fetch] r[timeline.pagination]
 //! r[toot.view-detail] r[toot.post.submit] r[toot.post.validation] r[toot.reply] r[toot.boost.toggle] r[toot.favourite.toggle]
 
-use crossterm::event::{self, Event, KeyCode, KeyEventKind};
+use crossterm::event::KeyCode;
 use ratatui::Frame;
 use tokio::runtime::Runtime;
 

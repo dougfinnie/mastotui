@@ -105,10 +105,11 @@ impl MastodonClient {
             format!("/statuses/{}/unreblog", id)
         };
         let response = self.request(reqwest::Method::POST, &path, None).await?;
-        if !response.status().is_success() {
+        let status = response.status();
+        if !status.is_success() {
             let text = response.text().await.unwrap_or_default();
             return Err(MastotuiError::Api {
-                status: response.status().as_u16(),
+                status: status.as_u16(),
                 message: text,
             });
         }
@@ -123,10 +124,11 @@ impl MastodonClient {
             format!("/statuses/{}/unfavourite", id)
         };
         let response = self.request(reqwest::Method::POST, &path, None).await?;
-        if !response.status().is_success() {
+        let status = response.status();
+        if !status.is_success() {
             let text = response.text().await.unwrap_or_default();
             return Err(MastotuiError::Api {
-                status: response.status().as_u16(),
+                status: status.as_u16(),
                 message: text,
             });
         }
@@ -137,10 +139,11 @@ impl MastodonClient {
     pub async fn get_status(&self, id: &str) -> Result<Status> {
         let path = format!("/statuses/{}", id);
         let response = self.request(reqwest::Method::GET, &path, None).await?;
-        if !response.status().is_success() {
+        let status = response.status();
+        if !status.is_success() {
             let text = response.text().await.unwrap_or_default();
             return Err(MastotuiError::Api {
-                status: response.status().as_u16(),
+                status: status.as_u16(),
                 message: text,
             });
         }
