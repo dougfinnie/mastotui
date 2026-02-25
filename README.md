@@ -36,8 +36,8 @@ On first run you’ll see the login screen. Enter your instance URL (e.g. `https
 ## Keys
 
 - **Login**: type instance URL or code, Enter to submit, `q` quit
-- **Timeline**: `↑`/`↓` or `j`/`k` move, `Enter` open toot, `n` new toot, `r` refresh, `q` quit
-- **Toot detail**: `b` boost, `f` favourite, `r` reply, `Esc` back
+- **Timeline**: `↑`/`↓` or `j`/`k` move, `Enter` open toot, `n` new toot, `r` refresh from top, `m` load more, `q` quit
+- **Toot detail**: `b` boost, `f` favourite, `r` reply, `Esc` back. Boosted toots show the original post and author with "Boosted by @user" at the top.
 - **Compose**: type, `Enter` post, `Esc` cancel
 
 ## Spec and Tracey
