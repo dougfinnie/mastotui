@@ -50,6 +50,9 @@ pub struct App {
     /// Shown on Timeline when a load failed (so we don't retry every tick).
     pub timeline_message: String,
 
+    /// Timeline content area height in rows (updated each draw); used so scroll follows selection.
+    pub timeline_visible_rows: usize,
+
     runtime: Runtime,
 }
 
@@ -90,6 +93,7 @@ impl App {
             compose_reply_to_id: None,
             compose_error: String::new(),
             timeline_message: String::new(),
+            timeline_visible_rows: 20,
             runtime,
         };
 
@@ -121,7 +125,18 @@ impl App {
         Ok(())
     }
 
-    pub fn draw(&self, frame: &mut Frame) {
+    pub fn draw(&mut self, frame: &mut Frame) {
+        if self.view == View::Timeline {
+            let total = frame.area().height as usize;
+            self.timeline_visible_rows = total.saturating_sub(2).max(1);
+            if !self.statuses.is_empty() {
+                if self.selected >= self.scroll + self.timeline_visible_rows {
+                    self.scroll = self.selected - self.timeline_visible_rows + 1;
+                } else if self.selected < self.scroll {
+                    self.scroll = self.selected;
+                }
+            }
+        }
         match self.view {
             View::Login => draw_login(
                 frame,
@@ -227,17 +242,17 @@ impl App {
                 KeyCode::Up | KeyCode::Char('k') => {
                     if self.selected > 0 {
                         self.selected -= 1;
-                        if self.scroll > 0 && self.selected < self.scroll {
-                            self.scroll = self.scroll.saturating_sub(1);
+                        if self.selected < self.scroll {
+                            self.scroll = self.selected;
                         }
                     }
                 }
                 KeyCode::Down | KeyCode::Char('j') => {
                     if self.selected + 1 < self.statuses.len() {
                         self.selected += 1;
-                        let area_h = 24_usize.saturating_sub(3);
-                        if self.selected >= self.scroll + area_h {
-                            self.scroll += 1;
+                        if self.selected >= self.scroll + self.timeline_visible_rows {
+                            self.scroll =
+                                (self.selected + 1).saturating_sub(self.timeline_visible_rows);
                         }
                     }
                 }
@@ -435,21 +450,45 @@ mod tests {
 
     #[test]
     fn auto_fetch_timeline_requires_not_loading() {
-        assert!(!should_auto_fetch_timeline(View::Timeline, true, true, true, true));
+        assert!(!should_auto_fetch_timeline(
+            View::Timeline,
+            true,
+            true,
+            true,
+            true
+        ));
     }
 
     #[test]
     fn auto_fetch_timeline_requires_empty_statuses() {
-        assert!(!should_auto_fetch_timeline(View::Timeline, true, false, false, true));
+        assert!(!should_auto_fetch_timeline(
+            View::Timeline,
+            true,
+            false,
+            false,
+            true
+        ));
     }
 
     #[test]
     fn auto_fetch_timeline_requires_no_prior_error() {
-        assert!(!should_auto_fetch_timeline(View::Timeline, true, false, true, false));
+        assert!(!should_auto_fetch_timeline(
+            View::Timeline,
+            true,
+            false,
+            true,
+            false
+        ));
     }
 
     #[test]
     fn auto_fetch_timeline_when_conditions_met() {
-        assert!(should_auto_fetch_timeline(View::Timeline, true, false, true, true));
+        assert!(should_auto_fetch_timeline(
+            View::Timeline,
+            true,
+            false,
+            true,
+            true
+        ));
     }
 }
