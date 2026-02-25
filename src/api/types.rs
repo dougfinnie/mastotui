@@ -36,7 +36,7 @@ pub struct Status {
     pub account: Account,
     pub created_at: String,
     pub visibility: Option<Visibility>,
-    pub reblog: Option<Box<Status>>,
+    pub reblog: Option<Box<Self>>,
     pub favourited: Option<bool>,
     pub reblogged: Option<bool>,
     pub in_reply_to_id: Option<String>,
