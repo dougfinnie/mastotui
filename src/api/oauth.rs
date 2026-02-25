@@ -20,13 +20,14 @@ pub async fn register_app_if_needed(
     client: &Client,
 ) -> Result<(String, String)> {
     let host = instance_host_from_url(instance_url)?;
+    // r[auth.app.register.skip-when-stored]: skip only when we have both config and secret for this instance
     if let Some(secret) = get_client_secret(&host)? {
-        // r[auth.app.register.skip-when-stored]: we have client id/secret; load from config + keyring
-        let cfg = config::load_config()?
-            .ok_or_else(|| MastotuiError::Config("No config but client secret exists".into()))?;
-        if cfg.instance_url == instance_url && !cfg.client_id.is_empty() {
-            return Ok((cfg.client_id.clone(), secret));
+        if let Some(cfg) = config::load_config()? {
+            if cfg.instance_url == instance_url && !cfg.client_id.is_empty() {
+                return Ok((cfg.client_id.clone(), secret));
+            }
         }
+        // Secret exists but no config (e.g. config file deleted or never saved). Re-register to get client_id.
     }
 
     // r[auth.app.register.on-first-login]: register app, store client_id in config and client_secret in keyring
