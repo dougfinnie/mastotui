@@ -1,0 +1,48 @@
+[package]
+name = "mastotui"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+description = "Terminal UI client for Mastodon"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+# TUI
+ratatui = "0.30"
+crossterm = "0.28"
+
+# Async runtime and HTTP
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+
+# OAuth 2.0
+oauth2 = { version = "4", features = ["reqwest"] }
+
+# Serialization and config
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+
+# Paths and secure storage
+directories = "5"
+keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
+
+# URL handling
+url = "2"
+
+# Error handling
+thiserror = "2"
+anyhow = "1"
+
+# HTML stripping for toot content (Mastodon returns HTML)
+scraper = "0.20"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+pedantic = "warn"
+nursery = "warn"
