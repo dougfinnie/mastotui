@@ -30,7 +30,13 @@ pub fn strip_html(html: &str) -> String {
         .replace("<br/>", "\n")
         .replace("<br />", "\n");
     let fragment = scraper::Html::parse_fragment(&s);
-    fragment.root_element().text().collect::<Vec<_>>().join("").trim().to_string()
+    fragment
+        .root_element()
+        .text()
+        .collect::<Vec<_>>()
+        .join("")
+        .trim()
+        .to_string()
 }
 
 /// r[config.first-run]: login / add instance screen.
