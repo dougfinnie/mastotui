@@ -1,6 +1,6 @@
 # mastotui
 
-A terminal UI client for Mastodon. Read your home timeline, view toots, post, reply, boost, and favourite from the terminal.
+A distraction-free Mastodon client built on [Ratatui](https://ratatui.rs). Read your home timeline, view toots, post, reply, boost, and favourite from the terminal.
 
 **Repository:** [github.com/dougfinnie/mastotui](https://github.com/dougfinnie/mastotui)
 
