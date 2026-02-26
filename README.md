@@ -1,8 +1,6 @@
 # mastotui
 
-A distraction-free Mastodon client built on [Ratatui](https://ratatui.rs). Read your home timeline, view toots, post, reply, boost, and favourite from the terminal.
-
-**Repository:** [github.com/dougfinnie/mastotui](https://github.com/dougfinnie/mastotui)
+A minimal, distraction-free Mastodon client built on [Ratatui](https://ratatui.rs). Read your home timeline, view toots, post, reply, boost, and favourite from the terminal.
 
 ## Build
 
