@@ -30,6 +30,69 @@ pub fn strip_html(html: &str) -> String {
         .to_string()
 }
 
+/// r[browse.instance.dialog]: instance picker for anonymous browse.
+pub fn draw_instance_picker(
+    frame: &mut Frame,
+    input: &str,
+    known: &[String],
+    selected: usize,
+    message: &str,
+) {
+    let area = frame.area();
+    let chunks = Layout::vertical([
+        Constraint::Length(3),
+        Constraint::Min(3),
+        Constraint::Length(2),
+        Constraint::Length(2),
+    ])
+    .split(area);
+
+    let title = Paragraph::new("Browse instance (anonymous)").block(
+        Block::default()
+            .borders(Borders::BOTTOM)
+            .border_style(Style::default().fg(Color::Cyan)),
+    );
+    frame.render_widget(title, chunks[0]);
+
+    let mut lines = vec![Line::from(Span::styled(
+        "Instance URL: ".to_string() + input + "▌",
+        Style::default().fg(Color::Green),
+    ))];
+    if !known.is_empty() {
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled(
+            "Known instances (↑/↓ to select, Enter to use):",
+            Style::default().add_modifier(Modifier::BOLD),
+        )));
+        for (i, url) in known.iter().enumerate() {
+            let style = if i == selected {
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::REVERSED)
+            } else {
+                Style::default()
+            };
+            lines.push(Line::from(Span::styled(format!("  {url}"), style)));
+        }
+    }
+    if !message.is_empty() {
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled(
+            message,
+            Style::default().fg(Color::Yellow),
+        )));
+    }
+    let block = Block::default().borders(Borders::ALL).title(" Instance ");
+    let para = Paragraph::new(lines).block(block).wrap(Wrap { trim: true });
+    frame.render_widget(para, chunks[1]);
+
+    let help = Line::from(Span::styled(
+        " Enter: open public timeline  Esc: cancel ",
+        Style::default().dim(),
+    ));
+    frame.render_widget(Paragraph::new(help), chunks[2]);
+}
+
 /// r[config.first-run]: login / add instance screen.
 pub fn draw_login(
     frame: &mut Frame,

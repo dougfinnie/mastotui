@@ -60,6 +60,20 @@ Given a toot is visible, when the user triggers Boost, the client MUST call the 
 r[toot.favourite.toggle]
 Given a toot is visible, when the user triggers Favourite, the client MUST call the API to favourite or un-favourite (if already favourited) and update the displayed state.
 
+## Browse instance anonymously
+
+r[browse.instance.dialog]
+Given any main view (Login, Timeline, TootDetail, Compose), when the user presses `i`, the client MUST open a dialog with a text box to enter an instance URL and an option to pick from known instances (e.g. the instance from config where the user has authenticated).
+
+r[browse.instance.submit]
+Given the instance picker is open, when the user enters a valid instance URL and confirms (or selects a known instance and confirms), the client MUST switch to that instance's public timeline (no login; read-only). Invalid URL MUST show an error in the dialog.
+
+r[browse.instance.cancel]
+Given the instance picker is open, when the user presses Esc, the client MUST close the dialog and restore the previous view.
+
+r[browse.instance.public-timeline]
+Given the user is viewing a public timeline anonymously, the client MUST fetch and display the public timeline (GET /api/v1/timelines/public). Post, boost, and favourite MUST NOT be available (read-only); view toot detail MUST be available.
+
 ## Configuration and persistence
 
 r[config.persist-after-login]
@@ -80,3 +94,4 @@ These are not requirements but document how the current implementation satisfies
 - **Refresh vs load more (r[timeline.pagination]):** `r` = refresh from top (replace statuses); `m` = load more (append next page). This keeps "refresh" and "load more" distinct per spec.
 - **Boosted toots (r[toot.view-detail]):** When a timeline item or opened toot is a reblog, the UI shows the original author and full content of the boosted post, with "boosted by @user" context so the booster is still visible. The API returns the wrapper status with `reblog` set to the original; we display the inner status for content and author.
 - **Timeline scroll:** The list scrolls so the selected toot stays visible. Visible row count is taken from the terminal each draw (`timeline_visible_rows`); on ↑/↓ or j/k the scroll position is updated so selection remains in view (and is corrected on resize).
+- **Browse instance (r[browse.instance.dialog]):** Press `i` from Login, Timeline, TootDetail, or Compose to open the instance picker. Text box for URL; known instances = current config instance URL if present. Enter confirms; Esc cancels. On confirm, view switches to Timeline with that instance's public timeline (no auth). Public timeline supports r/m (refresh/load more) and viewing toot detail; post/boost/favourite are hidden or no-op when anonymous.

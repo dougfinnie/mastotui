@@ -138,6 +138,45 @@ pub async fn exchange_code_for_token(
     Ok(access_token.to_string())
 }
 
+/// Obtain an app-level access token via `client_credentials` grant.
+/// Used for public timeline when the instance has "public preview" disabled (Mastodon 3.0+).
+/// Do not store this token; it is for anonymous read-only access only.
+pub async fn app_token_client_credentials(
+    instance_url: &str,
+    client_id: &str,
+    client_secret: &str,
+    http_client: &Client,
+) -> Result<String> {
+    let base = instance_url.trim_end_matches('/');
+    let token_url = format!("{base}/oauth/token");
+
+    let response = http_client
+        .post(&token_url)
+        .form(&[
+            ("grant_type", "client_credentials"),
+            ("client_id", client_id),
+            ("client_secret", client_secret),
+        ])
+        .send()
+        .await?;
+
+    let status = response.status();
+    if !status.is_success() {
+        let text = response.text().await.unwrap_or_default();
+        return Err(MastotuiError::OAuth(format!(
+            "App token failed: {status} - {text}"
+        )));
+    }
+
+    let json: serde_json::Value = response.json().await?;
+    let access_token = json
+        .get("access_token")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| MastotuiError::OAuth("App token response missing access_token".into()))?;
+
+    Ok(access_token.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     // r[verify auth.login.exchange-code]

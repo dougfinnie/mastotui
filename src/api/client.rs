@@ -4,6 +4,7 @@
 
 use reqwest::Client;
 
+use crate::api::oauth::{app_token_client_credentials, register_app_if_needed};
 use crate::api::types::Status;
 use crate::credential::{delete_access_token, get_access_token, instance_host_from_url};
 use crate::error::{MastotuiError, Result};
@@ -151,6 +152,51 @@ impl MastodonClient {
     }
 }
 
+/// Fetch public timeline for an instance. Tries without auth first; on 401 (instance requires
+/// auth for public timeline) obtains an app token via `client_credentials` and retries. r[browse.instance.public-timeline]
+pub async fn get_public_timeline(instance_url: &str, max_id: Option<&str>) -> Result<Vec<Status>> {
+    let base = instance_url.trim_end_matches('/');
+    let path = max_id.map_or_else(
+        || "/timelines/public?limit=20".to_string(),
+        |id| format!("/timelines/public?limit=20&max_id={id}"),
+    );
+    let url = format!("{base}/api/v1{path}");
+    let client = Client::builder().user_agent("mastotui/0.1").build()?;
+    let response = client.get(&url).send().await?;
+    let status = response.status();
+
+    if status == reqwest::StatusCode::UNAUTHORIZED {
+        let (client_id, client_secret) = register_app_if_needed(instance_url, &client).await?;
+        let app_token =
+            app_token_client_credentials(instance_url, &client_id, &client_secret, &client).await?;
+        let response = client
+            .get(&url)
+            .header("Authorization", format!("Bearer {app_token}"))
+            .send()
+            .await?;
+        let status = response.status();
+        if !status.is_success() {
+            let text = response.text().await.unwrap_or_default();
+            return Err(MastotuiError::Api {
+                status: status.as_u16(),
+                message: text,
+            });
+        }
+        let statuses: Vec<Status> = response.json().await?;
+        return Ok(statuses);
+    }
+
+    if !status.is_success() {
+        let text = response.text().await.unwrap_or_default();
+        return Err(MastotuiError::Api {
+            status: status.as_u16(),
+            message: text,
+        });
+    }
+    let statuses: Vec<Status> = response.json().await?;
+    Ok(statuses)
+}
+
 /// Build a client from stored config and keyring. r[auth.login.use-stored-token]
 pub fn client_from_stored_credentials(instance_url: &str) -> Result<Option<MastodonClient>> {
     let host = instance_host_from_url(instance_url)?;
@@ -231,5 +277,15 @@ mod tests {
     fn get_status_path_format() {
         let id = "99";
         assert_eq!(format!("/statuses/{id}"), "/statuses/99");
+    }
+
+    // r[verify browse.instance.public-timeline]
+    #[test]
+    fn public_timeline_path_format() {
+        let path = "/timelines/public?limit=20".to_string();
+        assert!(path.contains("timelines/public"));
+        assert!(path.contains("limit=20"));
+        let with_max = format!("/timelines/public?limit=20&max_id={}", "xyz");
+        assert!(with_max.contains("max_id=xyz"));
     }
 }

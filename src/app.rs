@@ -8,13 +8,13 @@ use tokio::runtime::Runtime;
 
 use crate::api::{
     authorization_url, client_from_stored_credentials, exchange_code_for_token,
-    register_app_if_needed, MastodonClient,
+    get_public_timeline, register_app_if_needed, MastodonClient,
 };
 use crate::config::{load_config, save_config, AppConfig};
 use crate::credential::get_client_secret;
 use crate::credential::instance_host_from_url;
 use crate::error::{MastotuiError, Result};
-use crate::tui::{draw_compose, draw_login, draw_timeline, draw_toot_detail};
+use crate::tui::{draw_compose, draw_instance_picker, draw_login, draw_timeline, draw_toot_detail};
 
 const CHAR_LIMIT: usize = 500;
 
@@ -24,6 +24,8 @@ pub enum View {
     Timeline,
     TootDetail,
     Compose,
+    /// r[browse.instance.dialog]: dialog to enter or pick instance for anonymous browse.
+    InstancePicker,
 }
 
 pub struct App {
@@ -53,6 +55,21 @@ pub struct App {
 
     /// Timeline content area height in rows (updated each draw); used so scroll follows selection.
     pub timeline_visible_rows: usize,
+
+    /// When set, we are viewing this instance's public timeline without login (read-only).
+    pub anonymous_instance_url: Option<String>,
+
+    /// View to restore when `InstancePicker` is cancelled. r[browse.instance.cancel]
+    pub return_to_view: View,
+
+    /// Instance picker: text box content. r[browse.instance.dialog]
+    pub instance_picker_input: String,
+    /// Known instances (e.g. from config) to pick from.
+    pub instance_picker_known: Vec<String>,
+    /// Selected index in `instance_picker_known` (0 when none).
+    pub instance_picker_selected: usize,
+    /// Error message shown in instance picker (e.g. invalid URL). r[browse.instance.submit]
+    pub instance_picker_message: String,
 
     runtime: Runtime,
 }
@@ -90,6 +107,15 @@ impl App {
             compose_error: String::new(),
             timeline_message: String::new(),
             timeline_visible_rows: 20,
+            anonymous_instance_url: None,
+            return_to_view: View::Login,
+            instance_picker_input: String::new(),
+            instance_picker_known: config
+                .as_ref()
+                .map(|c| vec![c.instance_url.clone()])
+                .unwrap_or_default(),
+            instance_picker_selected: 0,
+            instance_picker_message: String::new(),
             runtime,
         };
 
@@ -98,6 +124,26 @@ impl App {
         }
 
         Ok(app)
+    }
+
+    /// Open instance picker for anonymous browse. r[browse.instance.dialog]
+    fn open_instance_picker(&mut self, return_to: View) {
+        self.return_to_view = return_to;
+        self.view = View::InstancePicker;
+        self.instance_picker_input.clear();
+        let mut known = self
+            .config
+            .as_ref()
+            .map(|c| vec![c.instance_url.clone()])
+            .unwrap_or_default();
+        if let Some(ref u) = self.anonymous_instance_url {
+            if !known.contains(u) {
+                known.push(u.clone());
+            }
+        }
+        self.instance_picker_known = known;
+        self.instance_picker_selected = 0;
+        self.instance_picker_message.clear();
     }
 
     fn start_login_flow(&mut self) -> Result<()> {
@@ -162,6 +208,13 @@ impl App {
                 &self.compose_error,
                 CHAR_LIMIT,
             ),
+            View::InstancePicker => draw_instance_picker(
+                frame,
+                &self.instance_picker_input,
+                &self.instance_picker_known,
+                self.instance_picker_selected,
+                &self.instance_picker_message,
+            ),
         }
     }
 
@@ -170,6 +223,7 @@ impl App {
         match self.view {
             View::Login => match key {
                 KeyCode::Char('q') => quit = true,
+                KeyCode::Char('i') => self.open_instance_picker(View::Login),
                 KeyCode::Enter => {
                     if self.auth_url.is_empty() {
                         let input = self.login_code.trim().to_string();
@@ -261,10 +315,12 @@ impl App {
                     }
                 }
                 KeyCode::Char('n') => {
-                    self.compose_buffer.clear();
-                    self.compose_reply_to_id = None;
-                    self.compose_error.clear();
-                    self.view = View::Compose;
+                    if self.client.is_some() {
+                        self.compose_buffer.clear();
+                        self.compose_reply_to_id = None;
+                        self.compose_error.clear();
+                        self.view = View::Compose;
+                    }
                 }
                 KeyCode::Char('r') => {
                     self.load_timeline(false);
@@ -272,6 +328,7 @@ impl App {
                 KeyCode::Char('m') => {
                     self.load_timeline(true);
                 }
+                KeyCode::Char('i') => self.open_instance_picker(View::Timeline),
                 _ => {}
             },
             View::TootDetail => match key {
@@ -280,11 +337,13 @@ impl App {
                     self.detail_message.clear();
                 }
                 KeyCode::Char('r') => {
-                    if let Some(ref s) = self.detail_status {
-                        self.compose_buffer.clear();
-                        self.compose_reply_to_id = Some(s.id.clone());
-                        self.compose_error.clear();
-                        self.view = View::Compose;
+                    if self.client.is_some() {
+                        if let Some(ref s) = self.detail_status {
+                            self.compose_buffer.clear();
+                            self.compose_reply_to_id = Some(s.id.clone());
+                            self.compose_error.clear();
+                            self.view = View::Compose;
+                        }
                     }
                 }
                 KeyCode::Char('b') => {
@@ -320,6 +379,7 @@ impl App {
                         }
                     }
                 }
+                KeyCode::Char('i') => self.open_instance_picker(View::TootDetail),
                 _ => {}
             },
             View::Compose => match key {
@@ -331,6 +391,7 @@ impl App {
                     };
                     self.compose_error.clear();
                 }
+                KeyCode::Char('i') => self.open_instance_picker(View::Compose),
                 KeyCode::Enter => {
                     let text = self.compose_buffer.trim().to_string();
                     if text.is_empty() {
@@ -361,6 +422,58 @@ impl App {
                 KeyCode::Char(c) => self.compose_buffer.push(c),
                 KeyCode::Backspace => {
                     self.compose_buffer.pop();
+                }
+                _ => {}
+            },
+            View::InstancePicker => match key {
+                KeyCode::Esc => {
+                    self.view = self.return_to_view;
+                    self.instance_picker_message.clear();
+                }
+                KeyCode::Enter => {
+                    let url = self.instance_picker_input.trim();
+                    let url = if url.is_empty()
+                        && self.instance_picker_selected < self.instance_picker_known.len()
+                    {
+                        self.instance_picker_known[self.instance_picker_selected].trim()
+                    } else {
+                        url
+                    };
+                    if url.is_empty() {
+                        self.instance_picker_message =
+                            "Enter a URL or pick an instance.".to_string();
+                    } else if let Err(e) = instance_host_from_url(url) {
+                        self.instance_picker_message = format!("Invalid URL: {e}");
+                    } else {
+                        let url = url.to_string();
+                        self.anonymous_instance_url = Some(url);
+                        self.client = None;
+                        self.statuses.clear();
+                        self.selected = 0;
+                        self.scroll = 0;
+                        self.timeline_message.clear();
+                        self.view = View::Timeline;
+                        self.instance_picker_message.clear();
+                        self.load_timeline(false);
+                    }
+                }
+                KeyCode::Backspace => {
+                    self.instance_picker_input.pop();
+                    self.instance_picker_message.clear();
+                }
+                KeyCode::Up | KeyCode::Char('k') => {
+                    if self.instance_picker_selected > 0 {
+                        self.instance_picker_selected -= 1;
+                    }
+                }
+                KeyCode::Down | KeyCode::Char('j') => {
+                    if self.instance_picker_selected + 1 < self.instance_picker_known.len() {
+                        self.instance_picker_selected += 1;
+                    }
+                }
+                KeyCode::Char(c) => {
+                    self.instance_picker_input.push(c);
+                    self.instance_picker_message.clear();
                 }
                 _ => {}
             },
@@ -400,13 +513,35 @@ impl App {
                 }
             }
             self.loading = false;
+        } else if let Some(ref url) = self.anonymous_instance_url {
+            self.loading = true;
+            self.timeline_message.clear();
+            let max_id = if append && !self.statuses.is_empty() {
+                self.statuses.last().map(|s| s.id.as_str())
+            } else {
+                None
+            };
+            match self.runtime.block_on(get_public_timeline(url, max_id)) {
+                Ok(mut new_statuses) => {
+                    if max_id.is_some() {
+                        self.statuses.append(&mut new_statuses);
+                    } else {
+                        self.statuses = new_statuses;
+                    }
+                }
+                Err(e) => {
+                    self.timeline_message = format!("Failed to load timeline: {e}");
+                }
+            }
+            self.loading = false;
         }
     }
 
-    /// Called each tick; fetches timeline when on home view with client, not loading, empty statuses, no prior error.
+    /// Called each tick; fetches timeline when on home view with client or anonymous instance, not loading, empty statuses, no prior error.
     pub fn ensure_timeline_loaded(&mut self) -> Result<()> {
+        let has_source = self.client.is_some() || self.anonymous_instance_url.is_some();
         if self.view == View::Timeline
-            && self.client.is_some()
+            && has_source
             && !self.loading
             && self.statuses.is_empty()
             && self.timeline_message.is_empty()
@@ -487,5 +622,32 @@ mod tests {
             true,
             true
         ));
+    }
+
+    // r[verify browse.instance.dialog] r[verify browse.instance.cancel]
+    #[test]
+    fn instance_picker_opens_and_esc_cancels() {
+        let temp = tempfile::tempdir().unwrap();
+        std::env::set_var("XDG_CONFIG_HOME", temp.path());
+        let mut app = App::new().unwrap();
+        std::env::remove_var("XDG_CONFIG_HOME");
+        app.open_instance_picker(View::Timeline);
+        assert_eq!(app.view, View::InstancePicker);
+        assert_eq!(app.return_to_view, View::Timeline);
+        app.handle_key(KeyCode::Esc).unwrap();
+        assert_eq!(app.view, View::Timeline);
+    }
+
+    // r[verify browse.instance.submit]
+    #[test]
+    fn instance_picker_submit_invalid_url_shows_message() {
+        let temp = tempfile::tempdir().unwrap();
+        std::env::set_var("XDG_CONFIG_HOME", temp.path());
+        let mut app = App::new().unwrap();
+        std::env::remove_var("XDG_CONFIG_HOME");
+        app.open_instance_picker(View::Timeline);
+        app.instance_picker_input = "not-a-valid-url".to_string();
+        app.handle_key(KeyCode::Enter).unwrap();
+        assert!(!app.instance_picker_message.is_empty());
     }
 }
