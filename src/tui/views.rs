@@ -333,10 +333,14 @@ fn media_alt_lines(status: &Status) -> Vec<Line<'static>> {
                 .map(str::trim)
                 .filter(|d| !d.is_empty())
         })
-        .map(|alt| Line::from(Span::styled(
-            format!("[media: {alt}]"),
-            Style::default().fg(Color::DarkGray).add_modifier(Modifier::DIM),
-        )))
+        .map(|alt| {
+            Line::from(Span::styled(
+                format!("[media: {alt}]"),
+                Style::default()
+                    .fg(Color::DarkGray)
+                    .add_modifier(Modifier::DIM),
+            ))
+        })
         .collect()
 }
 
