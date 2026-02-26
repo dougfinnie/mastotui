@@ -880,7 +880,8 @@ mod tests {
         std::env::set_var("XDG_CONFIG_HOME", temp.path());
         let mut app = App::new().unwrap();
         std::env::remove_var("XDG_CONFIG_HOME");
-        app.client = Some(crate::api::MastodonClient::new("https://example.com", "fake-token").unwrap());
+        app.client =
+            Some(crate::api::MastodonClient::new("https://example.com", "fake-token").unwrap());
         app.instance_url = "https://example.com".to_string();
         app.view = View::InstanceInfo;
         app.return_to_view = View::Timeline;

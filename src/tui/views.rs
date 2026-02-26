@@ -203,7 +203,9 @@ pub fn draw_timeline_picker(
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled(
             lists_message,
-            Style::default().fg(Color::Yellow).add_modifier(Modifier::DIM),
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::DIM),
         )));
     }
     let block = Block::default().borders(Borders::ALL).title(" Timeline ");
@@ -348,20 +350,31 @@ pub fn draw_timeline(
 
     let content_area = chunks[1];
     if loading {
-        let para = Paragraph::new("Loading…")
-            .block(Block::default().borders(Borders::ALL).title(block_title.as_str()));
+        let para = Paragraph::new("Loading…").block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(block_title.as_str()),
+        );
         frame.render_widget(para, content_area);
         return;
     }
 
     if !message.is_empty() {
         let para = Paragraph::new(message)
-            .block(Block::default().borders(Borders::ALL).title(block_title.as_str()))
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title(block_title.as_str()),
+            )
             .style(Style::default().fg(Color::Red));
         frame.render_widget(para, content_area);
     } else if statuses.is_empty() {
         let para = Paragraph::new(EMPTY_TIMELINE_MESSAGE)
-            .block(Block::default().borders(Borders::ALL).title(block_title.as_str()))
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title(block_title.as_str()),
+            )
             .style(Style::default().fg(Color::DarkGray));
         frame.render_widget(para, content_area);
     } else {
@@ -423,7 +436,11 @@ pub fn draw_timeline(
             lines.push(content_line);
         }
         let para = Paragraph::new(lines)
-            .block(Block::default().borders(Borders::ALL).title(block_title.as_str()))
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title(block_title.as_str()),
+            )
             .wrap(Wrap { trim: true });
         frame.render_widget(para, content_area);
     }
