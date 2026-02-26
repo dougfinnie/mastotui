@@ -30,6 +30,72 @@ pub fn strip_html(html: &str) -> String {
         .to_string()
 }
 
+/// r[instance.info.dialog]: instance info (press i): current instance, l log out/in, b browse another.
+pub fn draw_instance_info(
+    frame: &mut Frame,
+    instance_url: &str,
+    is_logged_in: bool,
+    anonymous_instance_url: Option<&str>,
+) {
+    let area = frame.area();
+    let chunks = Layout::vertical([
+        Constraint::Length(3),
+        Constraint::Min(5),
+        Constraint::Length(2),
+    ])
+    .split(area);
+
+    let title = Paragraph::new("Instance").block(
+        Block::default()
+            .borders(Borders::BOTTOM)
+            .border_style(Style::default().fg(Color::Cyan)),
+    );
+    frame.render_widget(title, chunks[0]);
+
+    let display_url: &str = if instance_url.trim().is_empty() {
+        anonymous_instance_url.unwrap_or("(none)")
+    } else {
+        instance_url.trim()
+    };
+    let mut lines = vec![
+        Line::from(Span::styled(
+            "Instance: ",
+            Style::default().add_modifier(Modifier::BOLD),
+        )),
+        Line::from("  ".to_string() + display_url),
+        Line::from(""),
+    ];
+    let status = if is_logged_in {
+        "Logged in."
+    } else if anonymous_instance_url.is_some() {
+        "Browsing anonymously (public timeline only)."
+    } else {
+        "Not logged in."
+    };
+    lines.push(Line::from(Span::styled(
+        status,
+        Style::default().fg(Color::DarkGray),
+    )));
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        "l: Log out / Log in",
+        Style::default().fg(Color::Cyan),
+    )));
+    lines.push(Line::from(Span::styled(
+        "b: Browse another instance (anonymous)",
+        Style::default().fg(Color::Cyan),
+    )));
+    let block = Block::default().borders(Borders::ALL).title(" Instance ");
+    let para = Paragraph::new(lines).block(block).wrap(Wrap { trim: true });
+    frame.render_widget(para, chunks[1]);
+
+    let help = Line::from(Span::styled(
+        " l: log out/in  b: browse another  Esc: back ",
+        Style::default().dim(),
+    ));
+    frame.render_widget(Paragraph::new(help), chunks[2]);
+}
+
 /// r[browse.instance.dialog]: instance picker for anonymous browse.
 pub fn draw_instance_picker(
     frame: &mut Frame,
@@ -98,6 +164,7 @@ pub fn draw_timeline_picker(
     frame: &mut Frame,
     options: &[crate::app::TimelineSelection],
     selected: usize,
+    lists_message: &str,
 ) {
     let area = frame.area();
     let chunks = Layout::vertical([
@@ -129,6 +196,13 @@ pub fn draw_timeline_picker(
         lines.push(Line::from(Span::styled(
             format!("  {}", opt.label()),
             style,
+        )));
+    }
+    if !lists_message.is_empty() {
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled(
+            lists_message,
+            Style::default().fg(Color::Yellow).add_modifier(Modifier::DIM),
         )));
     }
     let block = Block::default().borders(Borders::ALL).title(" Timeline ");
@@ -187,11 +261,15 @@ pub fn draw_login(
             Style::default().fg(Color::Green),
         )));
     } else {
-        lines.push(Line::from(Span::styled(
-            "Open in browser: ",
-            Style::default().add_modifier(Modifier::BOLD),
-        )));
-        lines.push(Line::from(auth_url.to_string()));
+        // Ratatui renders Span content into buffer cells; OSC 8 in spans is not supported and
+        // renders as literal/corrupt. Show URL as plain text so it wraps cleanly; user can copy.
+        lines.push(Line::from(vec![
+            Span::styled(
+                "Open in browser: ",
+                Style::default().add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(auth_url),
+        ]));
         lines.push(Line::from(""));
         lines.push(Line::from(
             "After authorizing, paste the code and press Enter.",
@@ -208,11 +286,17 @@ pub fn draw_login(
             Style::default().fg(Color::Yellow),
         )));
     }
-    let block = Block::default().borders(Borders::ALL).title(" Login ");
+    // Top/bottom only so selecting the URL doesn't include side borders (│) and paste gets contiguous text.
+    let block = Block::default()
+        .borders(Borders::TOP | Borders::BOTTOM)
+        .title(" Login ");
     let para = Paragraph::new(lines).block(block).wrap(Wrap { trim: true });
     frame.render_widget(para, chunks[1]);
 
-    let help = Line::from(Span::styled("q: quit", Style::default().dim()));
+    let help = Line::from(Span::styled(
+        " q: quit (when entering URL)  Ctrl+Q or Ctrl+C: quit from any screen ",
+        Style::default().dim(),
+    ));
     frame.render_widget(Paragraph::new(help), chunks[2]);
 }
 
@@ -237,7 +321,7 @@ pub fn draw_timeline(
     message: &str,
 ) {
     let area = frame.area();
-    let block_title = format!(" {timeline_label}  t: change ");
+    let block_title = format!(" {timeline_label}  t: timeline  i: instance ");
     let chunks = Layout::vertical([
         Constraint::Length(1),
         Constraint::Min(0),
@@ -248,19 +332,19 @@ pub fn draw_timeline(
     let content_area = chunks[1];
     if loading {
         let para = Paragraph::new("Loading…")
-            .block(Block::default().borders(Borders::ALL).title(block_title.clone()));
+            .block(Block::default().borders(Borders::ALL).title(block_title.as_str()));
         frame.render_widget(para, content_area);
         return;
     }
 
     if !message.is_empty() {
         let para = Paragraph::new(message)
-            .block(Block::default().borders(Borders::ALL).title(block_title.clone()))
+            .block(Block::default().borders(Borders::ALL).title(block_title.as_str()))
             .style(Style::default().fg(Color::Red));
         frame.render_widget(para, content_area);
     } else if statuses.is_empty() {
         let para = Paragraph::new(EMPTY_TIMELINE_MESSAGE)
-            .block(Block::default().borders(Borders::ALL).title(block_title.clone()))
+            .block(Block::default().borders(Borders::ALL).title(block_title.as_str()))
             .style(Style::default().fg(Color::DarkGray));
         frame.render_widget(para, content_area);
     } else {
@@ -322,13 +406,13 @@ pub fn draw_timeline(
             lines.push(content_line);
         }
         let para = Paragraph::new(lines)
-            .block(Block::default().borders(Borders::ALL).title(block_title))
+            .block(Block::default().borders(Borders::ALL).title(block_title.as_str()))
             .wrap(Wrap { trim: true });
         frame.render_widget(para, content_area);
     }
 
     let status_line = Line::from(Span::styled(
-        " ↑/↓: select  Enter: open  n: new toot  t: change  q: quit  r: refresh ",
+        " ↑/↓: select  Enter: open  n: new toot  t: timeline  i: instance  q: quit  r: refresh ",
         Style::default().dim(),
     ));
     frame.render_widget(Paragraph::new(status_line), chunks[2]);

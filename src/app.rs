@@ -11,12 +11,11 @@ use crate::api::{
     get_public_timeline, register_app_if_needed, MastodonClient,
 };
 use crate::config::{load_config, save_config, AppConfig};
-use crate::credential::get_client_secret;
-use crate::credential::instance_host_from_url;
+use crate::credential::{delete_access_token, get_client_secret, instance_host_from_url};
 use crate::error::{MastotuiError, Result};
 use crate::tui::{
-    draw_compose, draw_instance_picker, draw_login, draw_timeline, draw_timeline_picker,
-    draw_toot_detail,
+    draw_compose, draw_instance_info, draw_instance_picker, draw_login, draw_timeline,
+    draw_timeline_picker, draw_toot_detail,
 };
 
 const CHAR_LIMIT: usize = 500;
@@ -50,6 +49,8 @@ pub enum View {
     Compose,
     /// r[browse.instance.dialog]: dialog to enter or pick instance for anonymous browse.
     InstancePicker,
+    /// r[instance.info.dialog]: current instance, l log out/in, b browse another. (press i).
+    InstanceInfo,
     /// Timeline picker: choose Home / Local / Public / List (press t).
     TimelinePicker,
 }
@@ -107,6 +108,8 @@ pub struct App {
     pub timeline_picker_options: Vec<TimelineSelection>,
     /// Selected index in `timeline_picker_options`.
     pub timeline_picker_selected: usize,
+    /// When `get_lists()` fails (e.g. missing `read:lists`), show hint to re-login.
+    pub timeline_picker_lists_message: String,
 
     runtime: Runtime,
 }
@@ -161,6 +164,7 @@ impl App {
             lists: Vec::new(),
             timeline_picker_options: Vec::new(),
             timeline_picker_selected: 0,
+            timeline_picker_lists_message: String::new(),
             runtime,
         };
 
@@ -169,6 +173,12 @@ impl App {
         }
 
         Ok(app)
+    }
+
+    /// Open instance info (i). r[instance.info.dialog]
+    fn open_instance_info(&mut self, return_to: View) {
+        self.return_to_view = return_to;
+        self.view = View::InstanceInfo;
     }
 
     /// Open instance picker for anonymous browse. r[browse.instance.dialog]
@@ -193,25 +203,26 @@ impl App {
 
     /// Open timeline picker (press t). Fetches lists when authenticated. r[timeline.select.dialog]
     fn open_timeline_picker(&mut self) {
+        self.timeline_picker_lists_message.clear();
         let mut options: Vec<TimelineSelection> = Vec::new();
         if self.client.is_some() {
             options.push(TimelineSelection::Home);
             options.push(TimelineSelection::Local);
             options.push(TimelineSelection::Public);
             if let Some(ref client) = self.client {
-                match self.runtime.block_on(client.get_lists()) {
-                    Ok(lists) => {
-                        self.lists = lists;
-                        for list in &self.lists {
-                            options.push(TimelineSelection::List {
-                                id: list.id.clone(),
-                                title: list.title.clone(),
-                            });
-                        }
+                if let Ok(lists) = self.runtime.block_on(client.get_lists()) {
+                    self.lists = lists;
+                    self.timeline_picker_lists_message.clear();
+                    for list in &self.lists {
+                        options.push(TimelineSelection::List {
+                            id: list.id.clone(),
+                            title: list.title.clone(),
+                        });
                     }
-                    Err(_) => {
-                        self.lists.clear();
-                    }
+                } else {
+                    self.lists.clear();
+                    self.timeline_picker_lists_message =
+                        "Lists unavailable. Re-login to enable list timelines.".to_string();
                 }
             }
         } else {
@@ -296,10 +307,17 @@ impl App {
                 self.instance_picker_selected,
                 &self.instance_picker_message,
             ),
+            View::InstanceInfo => draw_instance_info(
+                frame,
+                &self.instance_url,
+                self.client.is_some(),
+                self.anonymous_instance_url.as_deref(),
+            ),
             View::TimelinePicker => draw_timeline_picker(
                 frame,
                 &self.timeline_picker_options,
                 self.timeline_picker_selected,
+                &self.timeline_picker_lists_message,
             ),
         }
     }
@@ -308,8 +326,14 @@ impl App {
         let mut quit = false;
         match self.view {
             View::Login => match key {
-                KeyCode::Char('q') => quit = true,
-                KeyCode::Char('i') => self.open_instance_picker(View::Login),
+                KeyCode::Char('q') => {
+                    if self.auth_url.is_empty() {
+                        quit = true;
+                    } else {
+                        self.login_code.push('q');
+                    }
+                }
+                KeyCode::Char('i') => self.open_instance_info(View::Login),
                 KeyCode::Enter => {
                     if self.auth_url.is_empty() {
                         let input = self.login_code.trim().to_string();
@@ -414,7 +438,7 @@ impl App {
                 KeyCode::Char('m') => {
                     self.load_timeline(true);
                 }
-                KeyCode::Char('i') => self.open_instance_picker(View::Timeline),
+                KeyCode::Char('i') => self.open_instance_info(View::Timeline),
                 KeyCode::Char('t') => self.open_timeline_picker(),
                 _ => {}
             },
@@ -466,7 +490,7 @@ impl App {
                         }
                     }
                 }
-                KeyCode::Char('i') => self.open_instance_picker(View::TootDetail),
+                KeyCode::Char('i') => self.open_instance_info(View::TootDetail),
                 _ => {}
             },
             View::Compose => match key {
@@ -478,7 +502,7 @@ impl App {
                     };
                     self.compose_error.clear();
                 }
-                KeyCode::Char('i') => self.open_instance_picker(View::Compose),
+                KeyCode::Char('i') => self.open_instance_info(View::Compose),
                 KeyCode::Enter => {
                     let text = self.compose_buffer.trim().to_string();
                     if text.is_empty() {
@@ -509,6 +533,36 @@ impl App {
                 KeyCode::Char(c) => self.compose_buffer.push(c),
                 KeyCode::Backspace => {
                     self.compose_buffer.pop();
+                }
+                _ => {}
+            },
+            View::InstanceInfo => match key {
+                KeyCode::Esc => self.view = self.return_to_view,
+                KeyCode::Char('l') => {
+                    if self.client.is_some() {
+                        // r[instance.info.logout]
+                        if let Ok(host) = instance_host_from_url(&self.instance_url) {
+                            let _ = delete_access_token(&host);
+                        }
+                        self.client = None;
+                        self.statuses.clear();
+                        self.selected = 0;
+                        self.scroll = 0;
+                        self.timeline_message.clear();
+                        self.login_message = "Logged out.".to_string();
+                        self.view = View::Login;
+                        if self.config.is_some() && !self.instance_url.is_empty() {
+                            let _ = self.start_login_flow();
+                        }
+                    } else {
+                        // r[instance.info.login]
+                        self.view = View::Login;
+                        self.login_message.clear();
+                    }
+                }
+                KeyCode::Char('b') => {
+                    // r[instance.info.browse]
+                    self.open_instance_picker(View::InstanceInfo);
                 }
                 _ => {}
             },
@@ -758,11 +812,76 @@ mod tests {
         std::env::set_var("XDG_CONFIG_HOME", temp.path());
         let mut app = App::new().unwrap();
         std::env::remove_var("XDG_CONFIG_HOME");
+        app.view = View::Timeline;
         app.open_instance_picker(View::Timeline);
         assert_eq!(app.view, View::InstancePicker);
         assert_eq!(app.return_to_view, View::Timeline);
         app.handle_key(KeyCode::Esc).unwrap();
         assert_eq!(app.view, View::Timeline);
+    }
+
+    // r[verify instance.info.dialog]
+    #[test]
+    fn instance_info_opens_on_i_and_esc_returns() {
+        let temp = tempfile::tempdir().unwrap();
+        std::env::set_var("XDG_CONFIG_HOME", temp.path());
+        let mut app = App::new().unwrap();
+        std::env::remove_var("XDG_CONFIG_HOME");
+        app.view = View::Timeline;
+        app.handle_key(KeyCode::Char('i')).unwrap();
+        assert_eq!(app.view, View::InstanceInfo);
+        assert_eq!(app.return_to_view, View::Timeline);
+        app.handle_key(KeyCode::Esc).unwrap();
+        assert_eq!(app.view, View::Timeline);
+    }
+
+    // r[verify instance.info.browse]
+    #[test]
+    fn instance_info_b_opens_instance_picker() {
+        let temp = tempfile::tempdir().unwrap();
+        std::env::set_var("XDG_CONFIG_HOME", temp.path());
+        let mut app = App::new().unwrap();
+        std::env::remove_var("XDG_CONFIG_HOME");
+        app.view = View::Timeline;
+        app.handle_key(KeyCode::Char('i')).unwrap();
+        assert_eq!(app.view, View::InstanceInfo);
+        app.handle_key(KeyCode::Char('b')).unwrap();
+        assert_eq!(app.view, View::InstancePicker);
+        assert_eq!(app.return_to_view, View::InstanceInfo);
+        app.handle_key(KeyCode::Esc).unwrap();
+        assert_eq!(app.view, View::InstanceInfo);
+    }
+
+    // r[verify instance.info.login]
+    #[test]
+    fn instance_info_l_when_not_logged_in_goes_to_login() {
+        let temp = tempfile::tempdir().unwrap();
+        std::env::set_var("XDG_CONFIG_HOME", temp.path());
+        let mut app = App::new().unwrap();
+        std::env::remove_var("XDG_CONFIG_HOME");
+        app.view = View::Timeline;
+        app.client = None;
+        app.handle_key(KeyCode::Char('i')).unwrap();
+        assert_eq!(app.view, View::InstanceInfo);
+        app.handle_key(KeyCode::Char('l')).unwrap();
+        assert_eq!(app.view, View::Login);
+    }
+
+    // r[verify instance.info.logout]
+    #[test]
+    fn instance_info_l_when_logged_in_logs_out_and_goes_to_login() {
+        let temp = tempfile::tempdir().unwrap();
+        std::env::set_var("XDG_CONFIG_HOME", temp.path());
+        let mut app = App::new().unwrap();
+        std::env::remove_var("XDG_CONFIG_HOME");
+        app.client = Some(crate::api::MastodonClient::new("https://example.com", "fake-token").unwrap());
+        app.instance_url = "https://example.com".to_string();
+        app.view = View::InstanceInfo;
+        app.return_to_view = View::Timeline;
+        app.handle_key(KeyCode::Char('l')).unwrap();
+        assert_eq!(app.view, View::Login);
+        assert!(app.client.is_none());
+        assert_eq!(app.login_message, "Logged out.");
     }
 
     // r[verify timeline.select.header]

@@ -1,6 +1,6 @@
 //! mastotui — TUI client for Mastodon. r[config.first-run]
 
-use crossterm::event::{self, Event, KeyEventKind};
+use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use ratatui::prelude::CrosstermBackend;
 use ratatui::Terminal;
 
@@ -25,9 +25,16 @@ fn run_app(
 
         if event::poll(std::time::Duration::from_millis(100))? {
             if let Event::Key(key) = event::read()? {
-                if key.kind == KeyEventKind::Press
-                    && app.handle_key(key.code).map_err(std::io::Error::other)?
+                if key.kind != KeyEventKind::Press {
+                    continue;
+                }
+                // Ctrl+Q or Ctrl+C quits from any screen (e.g. when entering auth code, plain 'q' types 'q').
+                if key.modifiers.contains(KeyModifiers::CONTROL)
+                    && matches!(key.code, KeyCode::Char('q' | 'c'))
                 {
+                    break;
+                }
+                if app.handle_key(key.code).map_err(std::io::Error::other)? {
                     break;
                 }
             }
