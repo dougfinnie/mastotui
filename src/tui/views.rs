@@ -1,5 +1,6 @@
 //! TUI view rendering. r[timeline.home.empty-state] r[toot.view-detail] r[toot.post.validation]
 
+use hyperrat::Link;
 use ratatui::layout::{Constraint, Layout};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -90,7 +91,7 @@ pub fn draw_instance_info(
     frame.render_widget(para, chunks[1]);
 
     let help = Line::from(Span::styled(
-        " l: log out/in  b: browse another  Esc: back ",
+        " [l] log out/in  [b] browse another  [Esc] back ",
         Style::default().dim(),
     ));
     frame.render_widget(Paragraph::new(help), chunks[2]);
@@ -153,7 +154,7 @@ pub fn draw_instance_picker(
     frame.render_widget(para, chunks[1]);
 
     let help = Line::from(Span::styled(
-        " Enter: open public timeline  Esc: cancel ",
+        " [Enter] open public timeline  [Esc] cancel ",
         Style::default().dim(),
     ));
     frame.render_widget(Paragraph::new(help), chunks[2]);
@@ -182,7 +183,7 @@ pub fn draw_timeline_picker(
     frame.render_widget(title, chunks[0]);
 
     let mut lines = vec![Line::from(Span::styled(
-        "↑/↓ or j/k: move  Enter: select",
+        "[↑]/[↓] or [j]/[k]: move  [Enter] select",
         Style::default().add_modifier(Modifier::BOLD),
     ))];
     for (i, opt) in options.iter().enumerate() {
@@ -210,7 +211,7 @@ pub fn draw_timeline_picker(
     frame.render_widget(para, chunks[1]);
 
     let help = Line::from(Span::styled(
-        " Enter: switch  Esc: cancel ",
+        " [Enter] switch  [Esc] cancel ",
         Style::default().dim(),
     ));
     frame.render_widget(Paragraph::new(help), chunks[2]);
@@ -261,22 +262,9 @@ pub fn draw_login(
             Style::default().fg(Color::Green),
         )));
     } else {
-        // Ratatui renders Span content into buffer cells; OSC 8 in spans is not supported and
-        // renders as literal/corrupt. Show URL as plain text so it wraps cleanly; user can copy.
-        lines.push(Line::from(vec![
-            Span::styled(
-                "Open in browser: ",
-                Style::default().add_modifier(Modifier::BOLD),
-            ),
-            Span::raw(auth_url),
-        ]));
-        lines.push(Line::from(""));
-        lines.push(Line::from(
-            "After authorizing, paste the code and press Enter.",
-        ));
         lines.push(Line::from(Span::styled(
-            "Code: ".to_string() + code_buffer + "▌",
-            Style::default().fg(Color::Green),
+            "Open in browser:",
+            Style::default().add_modifier(Modifier::BOLD),
         )));
     }
     lines.push(Line::from(""));
@@ -290,11 +278,40 @@ pub fn draw_login(
     let block = Block::default()
         .borders(Borders::TOP | Borders::BOTTOM)
         .title(" Login ");
-    let para = Paragraph::new(lines).block(block).wrap(Wrap { trim: true });
-    frame.render_widget(para, chunks[1]);
+    if auth_url.is_empty() {
+        let para = Paragraph::new(lines).block(block).wrap(Wrap { trim: true });
+        frame.render_widget(para, chunks[1]);
+    } else {
+        frame.render_widget(block.clone(), chunks[1]);
+        let inner = block.inner(chunks[1]);
+        let inner_chunks = Layout::vertical([
+            Constraint::Length(3),
+            Constraint::Length(1),
+            Constraint::Min(3),
+        ])
+        .split(inner);
+        let above = inner_chunks[0];
+        let link_area = inner_chunks[1];
+        let below = inner_chunks[2];
+        let para_above = Paragraph::new(lines).wrap(Wrap { trim: true });
+        frame.render_widget(para_above, above);
+        let link = Link::new(auth_url, auth_url);
+        frame.render_widget(link, link_area);
+        let mut lines_below = vec![
+            Line::from(""),
+            Line::from("After authorizing, paste the code and press Enter."),
+            Line::from(Span::styled(
+                "Code: ".to_string() + code_buffer + "▌",
+                Style::default().fg(Color::Green),
+            )),
+        ];
+        lines_below.push(Line::from(""));
+        let para_below = Paragraph::new(lines_below).wrap(Wrap { trim: true });
+        frame.render_widget(para_below, below);
+    }
 
     let help = Line::from(Span::styled(
-        " q: quit (when entering URL)  Ctrl+Q or Ctrl+C: quit from any screen ",
+        " [q] quit (when entering URL)  [Ctrl+Q] or [Ctrl+C]: quit from any screen ",
         Style::default().dim(),
     ));
     frame.render_widget(Paragraph::new(help), chunks[2]);
@@ -321,7 +338,7 @@ pub fn draw_timeline(
     message: &str,
 ) {
     let area = frame.area();
-    let block_title = format!(" {timeline_label}  t: timeline  i: instance ");
+    let block_title = format!(" {timeline_label}  [t] timeline  [i] instance ");
     let chunks = Layout::vertical([
         Constraint::Length(1),
         Constraint::Min(0),
@@ -412,7 +429,7 @@ pub fn draw_timeline(
     }
 
     let status_line = Line::from(Span::styled(
-        " ↑/↓: select  Enter: open  n: new toot  t: timeline  i: instance  q: quit  r: refresh ",
+        " [↑]/[↓]  [Enter]: open  [p]: post  [t]: timeline  [q]: quit  [r]: refresh ",
         Style::default().dim(),
     ));
     frame.render_widget(Paragraph::new(status_line), chunks[2]);
@@ -481,7 +498,7 @@ pub fn draw_toot_detail(
     }
 
     let help = Line::from(Span::styled(
-        " b: boost  f: favourite  r: reply  Esc: back ",
+        " [b] boost  [f] favourite  [r] reply  [Esc] back ",
         Style::default().dim(),
     ));
     frame.render_widget(Paragraph::new(help), chunks[3]);
@@ -537,7 +554,7 @@ pub fn draw_compose(
     }
 
     let help = Line::from(Span::styled(
-        " Enter: post  Esc: cancel (no post) ",
+        " [Enter] post  [Esc] cancel (no post) ",
         Style::default().dim(),
     ));
     frame.render_widget(Paragraph::new(help), chunks[3]);

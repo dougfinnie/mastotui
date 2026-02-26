@@ -333,7 +333,13 @@ impl App {
                         self.login_code.push('q');
                     }
                 }
-                KeyCode::Char('i') => self.open_instance_info(View::Login),
+                KeyCode::Char('i') => {
+                    if self.auth_url.is_empty() {
+                        self.open_instance_info(View::Login);
+                    } else {
+                        self.login_code.push('i');
+                    }
+                }
                 KeyCode::Enter => {
                     if self.auth_url.is_empty() {
                         let input = self.login_code.trim().to_string();
@@ -424,7 +430,7 @@ impl App {
                         self.view = View::TootDetail;
                     }
                 }
-                KeyCode::Char('n') => {
+                KeyCode::Char('p') => {
                     if self.client.is_some() {
                         self.compose_buffer.clear();
                         self.compose_reply_to_id = None;

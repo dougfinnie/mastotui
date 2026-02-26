@@ -10,6 +10,7 @@ license = "MIT OR Apache-2.0"
 # TUI
 ratatui = "0.30"
 crossterm = "0.28"
+hyperrat = "0.1"  # OSC 8 link widget for clickable login URL
 
 # Async runtime and HTTP
 tokio = { version = "1", features = ["full"] }
