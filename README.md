@@ -44,6 +44,16 @@ On first run you’ll see the login screen. Enter your instance URL (e.g. `https
 
 Requirements are in `docs/spec/mastotui.md`. Use [Tracey](https://github.com/bearcove/tracey) for coverage: `tracey query status`, `tracey web`.
 
+### Pre-commit hook (format, clippy, test, spec)
+
+To avoid CI failures on push, use the git hook that runs the same checks as CI:
+
+```bash
+./scripts/setup-git-hooks.sh
+```
+
+Then every `git commit` will run `cargo fmt`, `cargo clippy -- -D warnings`, `cargo test`, and `./scripts/check-spec.sh`. Requires [Tracey](https://github.com/bearcove/tracey) for the spec check. To skip the hook once: `SKIP_PRE_COMMIT=1 git commit ...`.
+
 ### Detecting spec/code drift (CI or local)
 
 Run all checks (validate refs, require full impl + verify coverage, no stale refs):

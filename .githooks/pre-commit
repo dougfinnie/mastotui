@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Run the same checks as CI so format, clippy, test, and spec drift don't fail on push.
+# Requires: rustfmt, clippy, tracey (for scripts/check-spec.sh).
+# Enable: git config core.hooksPath .githooks   (or run scripts/setup-git-hooks.sh)
+# Skip: SKIP_PRE_COMMIT=1 git commit ...
+set -euo pipefail
+if [[ -n "${SKIP_PRE_COMMIT:-}" ]]; then
+  echo "Skipping pre-commit (SKIP_PRE_COMMIT is set)."
+  exit 0
+fi
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+
+echo "Pre-commit: format..."
+cargo fmt
+cargo fmt -- --check
+
+echo "Pre-commit: clippy..."
+cargo clippy -- -D warnings
+
+echo "Pre-commit: test..."
+cargo test
+
+echo "Pre-commit: spec drift (tracey)..."
+./scripts/check-spec.sh
+
+echo "Pre-commit: all checks passed."
+exit 0
