@@ -28,6 +28,12 @@ pub enum Visibility {
     Direct,
 }
 
+/// Alt text is in `description`; we only use it for [media: …] display.
+#[derive(Debug, Clone, Deserialize)]
+pub struct MediaAttachment {
+    pub description: Option<String>,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct Status {
     pub id: String,
@@ -41,6 +47,8 @@ pub struct Status {
     pub reblogged: Option<bool>,
     pub in_reply_to_id: Option<String>,
     pub in_reply_to_account_id: Option<String>,
+    #[serde(default)]
+    pub media_attachments: Vec<MediaAttachment>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
