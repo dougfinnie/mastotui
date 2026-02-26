@@ -2,7 +2,7 @@
 //! r[config.first-run] r[timeline.home.fetch] r[timeline.pagination]
 //! r[toot.view-detail] r[toot.post.submit] r[toot.post.validation] r[toot.reply] r[toot.boost.toggle] r[toot.favourite.toggle]
 
-use crossterm::event::KeyCode;
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::Frame;
 use tokio::runtime::Runtime;
 
@@ -322,10 +322,12 @@ impl App {
         }
     }
 
-    pub fn handle_key(&mut self, key: KeyCode) -> Result<bool> {
+    pub fn handle_key(&mut self, key: KeyEvent) -> Result<bool> {
         let mut quit = false;
+        let code = key.code;
+        let mods = key.modifiers;
         match self.view {
-            View::Login => match key {
+            View::Login => match code {
                 KeyCode::Char('q') => {
                     if self.auth_url.is_empty() {
                         quit = true;
@@ -404,7 +406,7 @@ impl App {
                 }
                 _ => {}
             },
-            View::Timeline => match key {
+            View::Timeline => match code {
                 KeyCode::Char('q') => quit = true,
                 KeyCode::Up | KeyCode::Char('k') => {
                     if self.selected > 0 {
@@ -448,7 +450,7 @@ impl App {
                 KeyCode::Char('t') => self.open_timeline_picker(),
                 _ => {}
             },
-            View::TootDetail => match key {
+            View::TootDetail => match code {
                 KeyCode::Esc => {
                     self.view = View::Timeline;
                     self.detail_message.clear();
@@ -499,7 +501,7 @@ impl App {
                 KeyCode::Char('i') => self.open_instance_info(View::TootDetail),
                 _ => {}
             },
-            View::Compose => match key {
+            View::Compose => match code {
                 KeyCode::Esc => {
                     self.view = if self.compose_reply_to_id.is_some() {
                         View::TootDetail
@@ -508,7 +510,9 @@ impl App {
                     };
                     self.compose_error.clear();
                 }
-                KeyCode::Char('i') => self.open_instance_info(View::Compose),
+                KeyCode::Char('i') if mods.contains(KeyModifiers::CONTROL) => {
+                    self.open_instance_info(View::Compose);
+                }
                 KeyCode::Enter => {
                     let text = self.compose_buffer.trim().to_string();
                     if text.is_empty() {
@@ -542,7 +546,7 @@ impl App {
                 }
                 _ => {}
             },
-            View::InstanceInfo => match key {
+            View::InstanceInfo => match code {
                 KeyCode::Esc => self.view = self.return_to_view,
                 KeyCode::Char('l') => {
                     if self.client.is_some() {
@@ -572,7 +576,7 @@ impl App {
                 }
                 _ => {}
             },
-            View::InstancePicker => match key {
+            View::InstancePicker => match code {
                 KeyCode::Esc => {
                     self.view = self.return_to_view;
                     self.instance_picker_message.clear();
@@ -625,7 +629,7 @@ impl App {
                 }
                 _ => {}
             },
-            View::TimelinePicker => match key {
+            View::TimelinePicker => match code {
                 // r[timeline.select.submit]: Esc cancels; Enter switches and loads
                 KeyCode::Esc => self.view = View::Timeline,
                 KeyCode::Enter => {
@@ -741,7 +745,17 @@ impl App {
 
 #[cfg(test)]
 mod tests {
+    use crossterm::event::KeyModifiers;
+
     use super::*;
+
+    fn k(code: KeyCode) -> KeyEvent {
+        KeyEvent::new(code, KeyModifiers::empty())
+    }
+
+    fn ctrl_i() -> KeyEvent {
+        KeyEvent::new(KeyCode::Char('i'), KeyModifiers::CONTROL)
+    }
 
     // r[verify toot.post.validation]
     #[test]
@@ -822,7 +836,7 @@ mod tests {
         app.open_instance_picker(View::Timeline);
         assert_eq!(app.view, View::InstancePicker);
         assert_eq!(app.return_to_view, View::Timeline);
-        app.handle_key(KeyCode::Esc).unwrap();
+        app.handle_key(k(KeyCode::Esc)).unwrap();
         assert_eq!(app.view, View::Timeline);
     }
 
@@ -834,10 +848,10 @@ mod tests {
         let mut app = App::new().unwrap();
         std::env::remove_var("XDG_CONFIG_HOME");
         app.view = View::Timeline;
-        app.handle_key(KeyCode::Char('i')).unwrap();
+        app.handle_key(k(KeyCode::Char('i'))).unwrap();
         assert_eq!(app.view, View::InstanceInfo);
         assert_eq!(app.return_to_view, View::Timeline);
-        app.handle_key(KeyCode::Esc).unwrap();
+        app.handle_key(k(KeyCode::Esc)).unwrap();
         assert_eq!(app.view, View::Timeline);
     }
 
@@ -849,12 +863,12 @@ mod tests {
         let mut app = App::new().unwrap();
         std::env::remove_var("XDG_CONFIG_HOME");
         app.view = View::Timeline;
-        app.handle_key(KeyCode::Char('i')).unwrap();
+        app.handle_key(k(KeyCode::Char('i'))).unwrap();
         assert_eq!(app.view, View::InstanceInfo);
-        app.handle_key(KeyCode::Char('b')).unwrap();
+        app.handle_key(k(KeyCode::Char('b'))).unwrap();
         assert_eq!(app.view, View::InstancePicker);
         assert_eq!(app.return_to_view, View::InstanceInfo);
-        app.handle_key(KeyCode::Esc).unwrap();
+        app.handle_key(k(KeyCode::Esc)).unwrap();
         assert_eq!(app.view, View::InstanceInfo);
     }
 
@@ -867,9 +881,9 @@ mod tests {
         std::env::remove_var("XDG_CONFIG_HOME");
         app.view = View::Timeline;
         app.client = None;
-        app.handle_key(KeyCode::Char('i')).unwrap();
+        app.handle_key(k(KeyCode::Char('i'))).unwrap();
         assert_eq!(app.view, View::InstanceInfo);
-        app.handle_key(KeyCode::Char('l')).unwrap();
+        app.handle_key(k(KeyCode::Char('l'))).unwrap();
         assert_eq!(app.view, View::Login);
     }
 
@@ -885,7 +899,7 @@ mod tests {
         app.instance_url = "https://example.com".to_string();
         app.view = View::InstanceInfo;
         app.return_to_view = View::Timeline;
-        app.handle_key(KeyCode::Char('l')).unwrap();
+        app.handle_key(k(KeyCode::Char('l'))).unwrap();
         assert_eq!(app.view, View::Login);
         assert!(app.client.is_none());
         assert_eq!(app.login_message, "Logged out.");
@@ -918,7 +932,7 @@ mod tests {
         app.open_timeline_picker();
         assert_eq!(app.view, View::TimelinePicker);
         assert!(!app.timeline_picker_options.is_empty());
-        app.handle_key(KeyCode::Esc).unwrap();
+        app.handle_key(k(KeyCode::Esc)).unwrap();
         assert_eq!(app.view, View::Timeline);
     }
 
@@ -931,7 +945,24 @@ mod tests {
         std::env::remove_var("XDG_CONFIG_HOME");
         app.open_instance_picker(View::Timeline);
         app.instance_picker_input = "not-a-valid-url".to_string();
-        app.handle_key(KeyCode::Enter).unwrap();
+        app.handle_key(k(KeyCode::Enter)).unwrap();
         assert!(!app.instance_picker_message.is_empty());
+    }
+
+    #[test]
+    fn compose_plain_letters_insert_including_i_ctrl_i_opens_instance_info() {
+        let temp = tempfile::tempdir().unwrap();
+        std::env::set_var("XDG_CONFIG_HOME", temp.path());
+        let mut app = App::new().unwrap();
+        std::env::remove_var("XDG_CONFIG_HOME");
+        app.view = View::Compose;
+        app.compose_buffer.clear();
+        app.handle_key(k(KeyCode::Char('h'))).unwrap();
+        app.handle_key(k(KeyCode::Char('i'))).unwrap();
+        assert_eq!(app.compose_buffer, "hi");
+        assert_eq!(app.view, View::Compose);
+        app.handle_key(ctrl_i()).unwrap();
+        assert_eq!(app.view, View::InstanceInfo);
+        assert_eq!(app.return_to_view, View::Compose);
     }
 }

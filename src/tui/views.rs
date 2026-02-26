@@ -322,6 +322,24 @@ pub fn draw_login(
 /// Message shown when home timeline is empty. r[timeline.home.empty-state]
 pub const EMPTY_TIMELINE_MESSAGE: &str = "No toots — home timeline is empty.";
 
+/// Lines for attachments that have alt text: one "[media: {alt}]" per description.
+fn media_alt_lines(status: &Status) -> Vec<Line<'static>> {
+    let s = display_status(status).0;
+    s.media_attachments
+        .iter()
+        .filter_map(|m| {
+            m.description
+                .as_deref()
+                .map(str::trim)
+                .filter(|d| !d.is_empty())
+        })
+        .map(|alt| Line::from(Span::styled(
+            format!("[media: {alt}]"),
+            Style::default().fg(Color::DarkGray).add_modifier(Modifier::DIM),
+        )))
+        .collect()
+}
+
 /// For display: the status whose author/content we show, and the booster account if this is a reblog.
 fn display_status(status: &Status) -> (&Status, Option<&Account>) {
     status.reblog.as_ref().map_or((status, None), |inner| {
@@ -434,6 +452,9 @@ pub fn draw_timeline(
                 style,
             ));
             lines.push(content_line);
+            for media_line in media_alt_lines(s) {
+                lines.push(media_line);
+            }
         }
         let para = Paragraph::new(lines)
             .block(
@@ -505,6 +526,9 @@ pub fn draw_toot_detail(
         Line::from(""),
         Line::from(content),
     ]);
+    for media_line in media_alt_lines(status) {
+        lines.push(media_line);
+    }
     let block = Block::default().borders(Borders::ALL);
     let para = Paragraph::new(lines).block(block).wrap(Wrap { trim: true });
     frame.render_widget(para, chunks[1]);
@@ -571,7 +595,7 @@ pub fn draw_compose(
     }
 
     let help = Line::from(Span::styled(
-        " [Enter] post  [Esc] cancel (no post) ",
+        " [Enter] post  [Esc] cancel  [Ctrl+i] instance ",
         Style::default().dim(),
     ));
     frame.render_widget(Paragraph::new(help), chunks[3]);

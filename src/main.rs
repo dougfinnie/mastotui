@@ -34,7 +34,7 @@ fn run_app(
                 {
                     break;
                 }
-                if app.handle_key(key.code).map_err(std::io::Error::other)? {
+                if app.handle_key(key).map_err(std::io::Error::other)? {
                     break;
                 }
             }
