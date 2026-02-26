@@ -44,6 +44,12 @@ pub struct Status {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+pub struct List {
+    pub id: String,
+    pub title: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct Card {
     pub url: Option<String>,
     pub title: Option<String>,

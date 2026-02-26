@@ -4,6 +4,6 @@ mod views;
 
 pub use views::strip_html;
 pub use views::{
-    draw_compose, draw_instance_picker, draw_login, draw_timeline, draw_toot_detail,
-    EMPTY_TIMELINE_MESSAGE,
+    draw_compose, draw_instance_picker, draw_login, draw_timeline, draw_timeline_picker,
+    draw_toot_detail, EMPTY_TIMELINE_MESSAGE,
 };

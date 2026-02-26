@@ -93,6 +93,55 @@ pub fn draw_instance_picker(
     frame.render_widget(Paragraph::new(help), chunks[2]);
 }
 
+/// Timeline picker dialog (press t): list of timeline options.
+pub fn draw_timeline_picker(
+    frame: &mut Frame,
+    options: &[crate::app::TimelineSelection],
+    selected: usize,
+) {
+    let area = frame.area();
+    let chunks = Layout::vertical([
+        Constraint::Length(3),
+        Constraint::Min(3),
+        Constraint::Length(2),
+    ])
+    .split(area);
+
+    let title = Paragraph::new("Select timeline").block(
+        Block::default()
+            .borders(Borders::BOTTOM)
+            .border_style(Style::default().fg(Color::Cyan)),
+    );
+    frame.render_widget(title, chunks[0]);
+
+    let mut lines = vec![Line::from(Span::styled(
+        "↑/↓ or j/k: move  Enter: select",
+        Style::default().add_modifier(Modifier::BOLD),
+    ))];
+    for (i, opt) in options.iter().enumerate() {
+        let style = if i == selected {
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::REVERSED)
+        } else {
+            Style::default()
+        };
+        lines.push(Line::from(Span::styled(
+            format!("  {}", opt.label()),
+            style,
+        )));
+    }
+    let block = Block::default().borders(Borders::ALL).title(" Timeline ");
+    let para = Paragraph::new(lines).block(block);
+    frame.render_widget(para, chunks[1]);
+
+    let help = Line::from(Span::styled(
+        " Enter: switch  Esc: cancel ",
+        Style::default().dim(),
+    ));
+    frame.render_widget(Paragraph::new(help), chunks[2]);
+}
+
 /// r[config.first-run]: login / add instance screen.
 pub fn draw_login(
     frame: &mut Frame,
@@ -177,9 +226,10 @@ fn display_status(status: &Status) -> (&Status, Option<&Account>) {
     })
 }
 
-/// r[timeline.home.fetch] r[timeline.home.empty-state]: timeline list.
+/// r[timeline.home.fetch] r[timeline.home.empty-state] r[timeline.select.header]: timeline list and current timeline label in header.
 pub fn draw_timeline(
     frame: &mut Frame,
+    timeline_label: &str,
     statuses: &[Status],
     selected: usize,
     scroll: usize,
@@ -187,6 +237,7 @@ pub fn draw_timeline(
     message: &str,
 ) {
     let area = frame.area();
+    let block_title = format!(" {timeline_label}  t: change ");
     let chunks = Layout::vertical([
         Constraint::Length(1),
         Constraint::Min(0),
@@ -194,28 +245,22 @@ pub fn draw_timeline(
     ])
     .split(area);
 
-    let title = Paragraph::new(" Home timeline ").block(
-        Block::default()
-            .borders(Borders::BOTTOM)
-            .border_style(Style::default().fg(Color::Cyan)),
-    );
-    frame.render_widget(title, chunks[0]);
-
     let content_area = chunks[1];
     if loading {
-        let para = Paragraph::new("Loading…").block(Block::default().borders(Borders::ALL));
+        let para = Paragraph::new("Loading…")
+            .block(Block::default().borders(Borders::ALL).title(block_title.clone()));
         frame.render_widget(para, content_area);
         return;
     }
 
     if !message.is_empty() {
         let para = Paragraph::new(message)
-            .block(Block::default().borders(Borders::ALL).title(" Timeline "))
+            .block(Block::default().borders(Borders::ALL).title(block_title.clone()))
             .style(Style::default().fg(Color::Red));
         frame.render_widget(para, content_area);
     } else if statuses.is_empty() {
         let para = Paragraph::new(EMPTY_TIMELINE_MESSAGE)
-            .block(Block::default().borders(Borders::ALL).title(" Timeline "))
+            .block(Block::default().borders(Borders::ALL).title(block_title.clone()))
             .style(Style::default().fg(Color::DarkGray));
         frame.render_widget(para, content_area);
     } else {
@@ -277,13 +322,13 @@ pub fn draw_timeline(
             lines.push(content_line);
         }
         let para = Paragraph::new(lines)
-            .block(Block::default().borders(Borders::ALL).title(" Timeline "))
+            .block(Block::default().borders(Borders::ALL).title(block_title))
             .wrap(Wrap { trim: true });
         frame.render_widget(para, content_area);
     }
 
     let status_line = Line::from(Span::styled(
-        " ↑/↓: select  Enter: open  n: new toot  q: quit  r: refresh ",
+        " ↑/↓: select  Enter: open  n: new toot  t: change  q: quit  r: refresh ",
         Style::default().dim(),
     ));
     frame.render_widget(Paragraph::new(status_line), chunks[2]);

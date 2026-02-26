@@ -34,6 +34,17 @@ Given the home timeline is loaded, when the API response is empty, the UI MUST s
 r[timeline.pagination]
 Given the home timeline is shown, when the user scrolls to the bottom (or triggers "load more"), the client MUST fetch the next page and append toots to the timeline.
 
+### Timeline selection
+
+r[timeline.select.header]
+The client MUST show the current timeline name (e.g. Home, Local, Public, or a list name) in the header of the timeline view.
+
+r[timeline.select.dialog]
+Given the user is on the timeline view, when the user presses `t`, the client MUST open a dialog to select a timeline. Authenticated users MUST be offered Home, Local, Public, and their lists (from the API). Anonymous users MUST see only Public.
+
+r[timeline.select.submit]
+Given the timeline picker is open, when the user selects an option and confirms (Enter), the client MUST switch to that timeline and fetch its content. Esc MUST close the picker without changing the timeline.
+
 ## Toot actions
 
 ### View toot
@@ -95,3 +106,4 @@ These are not requirements but document how the current implementation satisfies
 - **Boosted toots (r[toot.view-detail]):** When a timeline item or opened toot is a reblog, the UI shows the original author and full content of the boosted post, with "boosted by @user" context so the booster is still visible. The API returns the wrapper status with `reblog` set to the original; we display the inner status for content and author.
 - **Timeline scroll:** The list scrolls so the selected toot stays visible. Visible row count is taken from the terminal each draw (`timeline_visible_rows`); on ↑/↓ or j/k the scroll position is updated so selection remains in view (and is corrected on resize).
 - **Browse instance (r[browse.instance.dialog]):** Press `i` from Login, Timeline, TootDetail, or Compose to open the instance picker. Text box for URL; known instances = current config instance URL if present. Enter confirms; Esc cancels. On confirm, view switches to Timeline with that instance's public timeline (no auth). Public timeline supports r/m (refresh/load more) and viewing toot detail; post/boost/favourite are hidden or no-op when anonymous.
+- **Timeline selection (r[timeline.select.*]):** The timeline header shows the current timeline label. Press `t` to open the timeline picker: Home (followed accounts), Local (instance-only public), Public (federated), and user lists (from GET /api/v1/lists). Lists are fetched when the picker opens. Enter switches timeline and loads content; Esc cancels.

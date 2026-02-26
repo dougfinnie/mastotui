@@ -5,7 +5,7 @@
 use reqwest::Client;
 
 use crate::api::oauth::{app_token_client_credentials, register_app_if_needed};
-use crate::api::types::Status;
+use crate::api::types::{List, Status};
 use crate::credential::{delete_access_token, get_access_token, instance_host_from_url};
 use crate::error::{MastotuiError, Result};
 
@@ -65,7 +65,57 @@ impl MastodonClient {
             || "/timelines/home?limit=20".to_string(),
             |id| format!("/timelines/home?limit=20&max_id={id}"),
         );
-        let response = self.request(reqwest::Method::GET, &path, None).await?;
+        self.fetch_timeline_path(&path).await
+    }
+
+    /// Fetch public timeline (local only) with auth.
+    pub async fn get_timeline_local(&self, max_id: Option<&str>) -> Result<Vec<Status>> {
+        let path = max_id.map_or_else(
+            || "/timelines/public?limit=20&local=true".to_string(),
+            |id| format!("/timelines/public?limit=20&local=true&max_id={id}"),
+        );
+        self.fetch_timeline_path(&path).await
+    }
+
+    /// Fetch public (federated) timeline with auth.
+    pub async fn get_timeline_public(&self, max_id: Option<&str>) -> Result<Vec<Status>> {
+        let path = max_id.map_or_else(
+            || "/timelines/public?limit=20".to_string(),
+            |id| format!("/timelines/public?limit=20&max_id={id}"),
+        );
+        self.fetch_timeline_path(&path).await
+    }
+
+    /// Fetch a list timeline. Requires read:lists.
+    pub async fn get_timeline_list(
+        &self,
+        list_id: &str,
+        max_id: Option<&str>,
+    ) -> Result<Vec<Status>> {
+        let path = max_id.map_or_else(
+            || format!("/timelines/list/{list_id}?limit=20"),
+            |id| format!("/timelines/list/{list_id}?limit=20&max_id={id}"),
+        );
+        self.fetch_timeline_path(&path).await
+    }
+
+    /// Fetch user's lists. Requires read:lists.
+    pub async fn get_lists(&self) -> Result<Vec<List>> {
+        let response = self.request(reqwest::Method::GET, "/lists", None).await?;
+        let status = response.status();
+        if !status.is_success() {
+            let text = response.text().await.unwrap_or_default();
+            return Err(MastotuiError::Api {
+                status: status.as_u16(),
+                message: text,
+            });
+        }
+        let lists: Vec<List> = response.json().await?;
+        Ok(lists)
+    }
+
+    async fn fetch_timeline_path(&self, path: &str) -> Result<Vec<Status>> {
+        let response = self.request(reqwest::Method::GET, path, None).await?;
         let status = response.status();
         if !status.is_success() {
             let text = response.text().await.unwrap_or_default();

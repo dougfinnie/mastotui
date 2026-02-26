@@ -14,9 +14,33 @@ use crate::config::{load_config, save_config, AppConfig};
 use crate::credential::get_client_secret;
 use crate::credential::instance_host_from_url;
 use crate::error::{MastotuiError, Result};
-use crate::tui::{draw_compose, draw_instance_picker, draw_login, draw_timeline, draw_toot_detail};
+use crate::tui::{
+    draw_compose, draw_instance_picker, draw_login, draw_timeline, draw_timeline_picker,
+    draw_toot_detail,
+};
 
 const CHAR_LIMIT: usize = 500;
+
+/// Which timeline is currently shown (or selected in the picker).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TimelineSelection {
+    Home,
+    Local,
+    Public,
+    List { id: String, title: String },
+}
+
+impl TimelineSelection {
+    #[must_use]
+    pub fn label(&self) -> String {
+        match self {
+            Self::Home => "Home".to_string(),
+            Self::Local => "Local".to_string(),
+            Self::Public => "Public".to_string(),
+            Self::List { title, .. } => title.clone(),
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum View {
@@ -26,6 +50,8 @@ pub enum View {
     Compose,
     /// r[browse.instance.dialog]: dialog to enter or pick instance for anonymous browse.
     InstancePicker,
+    /// Timeline picker: choose Home / Local / Public / List (press t).
+    TimelinePicker,
 }
 
 pub struct App {
@@ -70,6 +96,17 @@ pub struct App {
     pub instance_picker_selected: usize,
     /// Error message shown in instance picker (e.g. invalid URL). r[browse.instance.submit]
     pub instance_picker_message: String,
+
+    /// Which timeline is displayed (Home, Local, Public, or a list).
+    pub current_timeline: TimelineSelection,
+
+    /// User's lists (fetched when opening timeline picker; requires read:lists).
+    pub lists: Vec<crate::api::List>,
+
+    /// Timeline picker: options to choose from (built when opening picker).
+    pub timeline_picker_options: Vec<TimelineSelection>,
+    /// Selected index in `timeline_picker_options`.
+    pub timeline_picker_selected: usize,
 
     runtime: Runtime,
 }
@@ -116,6 +153,14 @@ impl App {
                 .unwrap_or_default(),
             instance_picker_selected: 0,
             instance_picker_message: String::new(),
+            current_timeline: if view == View::Timeline {
+                TimelineSelection::Home
+            } else {
+                TimelineSelection::Public
+            },
+            lists: Vec::new(),
+            timeline_picker_options: Vec::new(),
+            timeline_picker_selected: 0,
             runtime,
         };
 
@@ -144,6 +189,41 @@ impl App {
         self.instance_picker_known = known;
         self.instance_picker_selected = 0;
         self.instance_picker_message.clear();
+    }
+
+    /// Open timeline picker (press t). Fetches lists when authenticated. r[timeline.select.dialog]
+    fn open_timeline_picker(&mut self) {
+        let mut options: Vec<TimelineSelection> = Vec::new();
+        if self.client.is_some() {
+            options.push(TimelineSelection::Home);
+            options.push(TimelineSelection::Local);
+            options.push(TimelineSelection::Public);
+            if let Some(ref client) = self.client {
+                match self.runtime.block_on(client.get_lists()) {
+                    Ok(lists) => {
+                        self.lists = lists;
+                        for list in &self.lists {
+                            options.push(TimelineSelection::List {
+                                id: list.id.clone(),
+                                title: list.title.clone(),
+                            });
+                        }
+                    }
+                    Err(_) => {
+                        self.lists.clear();
+                    }
+                }
+            }
+        } else {
+            options.push(TimelineSelection::Public);
+        }
+        self.timeline_picker_options = options;
+        self.timeline_picker_selected = self
+            .timeline_picker_options
+            .iter()
+            .position(|o| o == &self.current_timeline)
+            .unwrap_or(0);
+        self.view = View::TimelinePicker;
     }
 
     fn start_login_flow(&mut self) -> Result<()> {
@@ -190,6 +270,7 @@ impl App {
             ),
             View::Timeline => draw_timeline(
                 frame,
+                &self.current_timeline.label(),
                 &self.statuses,
                 self.selected,
                 self.scroll,
@@ -214,6 +295,11 @@ impl App {
                 &self.instance_picker_known,
                 self.instance_picker_selected,
                 &self.instance_picker_message,
+            ),
+            View::TimelinePicker => draw_timeline_picker(
+                frame,
+                &self.timeline_picker_options,
+                self.timeline_picker_selected,
             ),
         }
     }
@@ -329,6 +415,7 @@ impl App {
                     self.load_timeline(true);
                 }
                 KeyCode::Char('i') => self.open_instance_picker(View::Timeline),
+                KeyCode::Char('t') => self.open_timeline_picker(),
                 _ => {}
             },
             View::TootDetail => match key {
@@ -448,6 +535,7 @@ impl App {
                         let url = url.to_string();
                         self.anonymous_instance_url = Some(url);
                         self.client = None;
+                        self.current_timeline = TimelineSelection::Public;
                         self.statuses.clear();
                         self.selected = 0;
                         self.scroll = 0;
@@ -477,6 +565,33 @@ impl App {
                 }
                 _ => {}
             },
+            View::TimelinePicker => match key {
+                // r[timeline.select.submit]: Esc cancels; Enter switches and loads
+                KeyCode::Esc => self.view = View::Timeline,
+                KeyCode::Enter => {
+                    if self.timeline_picker_selected < self.timeline_picker_options.len() {
+                        self.current_timeline =
+                            self.timeline_picker_options[self.timeline_picker_selected].clone();
+                        self.statuses.clear();
+                        self.selected = 0;
+                        self.scroll = 0;
+                        self.timeline_message.clear();
+                        self.view = View::Timeline;
+                        self.load_timeline(false);
+                    }
+                }
+                KeyCode::Up | KeyCode::Char('k') => {
+                    if self.timeline_picker_selected > 0 {
+                        self.timeline_picker_selected -= 1;
+                    }
+                }
+                KeyCode::Down | KeyCode::Char('j') => {
+                    if self.timeline_picker_selected + 1 < self.timeline_picker_options.len() {
+                        self.timeline_picker_selected += 1;
+                    }
+                }
+                _ => {}
+            },
         }
         Ok(quit)
     }
@@ -492,7 +607,19 @@ impl App {
                 None
             };
             let max_id = max_id_str.as_deref();
-            match self.runtime.block_on(client.get_timeline_home(max_id)) {
+            let result = match &self.current_timeline {
+                TimelineSelection::Home => self.runtime.block_on(client.get_timeline_home(max_id)),
+                TimelineSelection::Local => {
+                    self.runtime.block_on(client.get_timeline_local(max_id))
+                }
+                TimelineSelection::Public => {
+                    self.runtime.block_on(client.get_timeline_public(max_id))
+                }
+                TimelineSelection::List { id, .. } => {
+                    self.runtime.block_on(client.get_timeline_list(id, max_id))
+                }
+            };
+            match result {
                 Ok(mut new_statuses) => {
                     if max_id.is_some() {
                         self.statuses.append(&mut new_statuses);
@@ -634,6 +761,37 @@ mod tests {
         app.open_instance_picker(View::Timeline);
         assert_eq!(app.view, View::InstancePicker);
         assert_eq!(app.return_to_view, View::Timeline);
+        app.handle_key(KeyCode::Esc).unwrap();
+        assert_eq!(app.view, View::Timeline);
+    }
+
+    // r[verify timeline.select.header]
+    #[test]
+    fn timeline_selection_label_for_header() {
+        assert_eq!(TimelineSelection::Home.label(), "Home");
+        assert_eq!(TimelineSelection::Local.label(), "Local");
+        assert_eq!(TimelineSelection::Public.label(), "Public");
+        assert_eq!(
+            TimelineSelection::List {
+                id: "1".to_string(),
+                title: "Friends".to_string()
+            }
+            .label(),
+            "Friends"
+        );
+    }
+
+    // r[verify timeline.select.dialog] r[verify timeline.select.submit]
+    #[test]
+    fn timeline_picker_opens_and_esc_cancels() {
+        let temp = tempfile::tempdir().unwrap();
+        std::env::set_var("XDG_CONFIG_HOME", temp.path());
+        let mut app = App::new().unwrap();
+        std::env::remove_var("XDG_CONFIG_HOME");
+        app.view = View::Timeline;
+        app.open_timeline_picker();
+        assert_eq!(app.view, View::TimelinePicker);
+        assert!(!app.timeline_picker_options.is_empty());
         app.handle_key(KeyCode::Esc).unwrap();
         assert_eq!(app.view, View::Timeline);
     }
